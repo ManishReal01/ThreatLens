@@ -1,357 +1,696 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api.client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Network, ShieldAlert, Tag, MessageSquare, CheckCircle2, Clock, X, Edit, Trash, Save, Bookmark, BookmarkCheck } from "lucide-react";
+import { getSeverity, formatDate, formatDateTime } from "@/lib/utils";
+import {
+  ArrowLeft, Network, ShieldAlert, Tag, MessageSquare,
+  Clock, X, Edit3, Trash2, Save, Bookmark, BookmarkCheck,
+  Layers, AlertTriangle, ChevronRight,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-const MOCK_DETAIL = {
-  id: "ioc-1",
-  value: "185.15.247.140",
-  type: "ipv4",
-  severity: "critical",
-  score: 98,
-  first_seen: new Date(Date.now() - 30 * 86400000).toISOString(),
-  last_seen: new Date().toISOString(),
-  score_breakdown: {
-    base_confidence: 85,
-    source_count_multiplier: 1.1,
-    recency_factor: 1.05,
-  },
-  observations: [
-    { id: 1, feed: "AbuseIPDB", date: new Date().toISOString(), confidence: 100, raw: { isp: "DigitalOcean" } },
-    { id: 2, feed: "AlienVault OTX", date: new Date(Date.now() - 86400000).toISOString(), confidence: 90, raw: { tags: ["malware"] } },
-  ],
-  analyst_tags: ["c2-server", "apt29"],
-  analyst_notes: [
-    { id: 1, text: "Observed communicating with compromised internal host.", date: new Date().toISOString() }
-  ],
-  is_watched: false
+/* ─── Types (matching backend schemas.py) ─────────────────────────────── */
+interface IOCSource {
+  id: string;
+  feed_name: string;
+  raw_score: number | null;
+  ingested_at: string;
+  raw_payload: Record<string, unknown> | null;
+}
+interface IOCTag {
+  id: string;
+  tag: string;
+  created_at: string;
+}
+interface IOCNote {
+  id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+interface IOCDetail {
+  id: string;
+  value: string;
+  type: string;
+  severity: number | null;
+  first_seen: string;
+  last_seen: string;
+  source_count: number;
+  is_active: boolean;
+  score_version: number;
+  score_explanation: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  sources: IOCSource[];
+  tags: IOCTag[];
+  notes: IOCNote[];
+}
+
+/* ─── Skeleton ───────────────────────────────────────────────────────────── */
+function Sk({ className = "" }: { className?: string }) {
+  return <div className={`skeleton ${className}`} />;
+}
+
+/* ─── Type badge ────────────────────────────────────────────────────────── */
+const TYPE_COLORS: Record<string, string> = {
+  ipv4:        "bg-sky-500/10 text-sky-400 border-sky-500/20",
+  domain:      "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  url:         "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  hash_md5:    "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  hash_sha1:   "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  hash_sha256: "bg-amber-500/10 text-amber-400 border-amber-500/20",
 };
 
-const PREDEFINED_TAGS = [
-  { value: "confirmed", label: "Confirmed" },
-  { value: "false-positive", label: "False Positive" },
-  { value: "watching", label: "Watching" },
-  { value: "investigating", label: "Investigating" },
-  { value: "resolved", label: "Resolved" }
-];
+const PREDEFINED_TAGS = ["confirmed", "false-positive", "watching", "investigating", "resolved", "c2", "phishing"];
 
-export default function IOCDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const unwrappedParams = use(params);
+/* ─── Main page ─────────────────────────────────────────────────────────── */
+// Next.js 14: params is a plain object (not a Promise)
+export default function IOCDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const router = useRouter();
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  const [data, setData] = useState<any>(MOCK_DETAIL);
+
+  const [data, setData] = useState<IOCDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  
+  const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isWatched, setIsWatched] = useState(false);
+
   const [newTag, setNewTag] = useState("");
   const [newNote, setNewNote] = useState("");
-  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState("");
 
   useEffect(() => {
-    async function loadData() {
+    async function load() {
       try {
-        const res = await fetchApi(`/api/iocs/${unwrappedParams.id}`);
-        if (res) setData(res);
-      } catch {
-        // Fallback to mock
+        const res: IOCDetail = await fetchApi(`/api/iocs/${id}`);
+        setData(res);
+        // Check watchlist
+        try {
+          const wl = await fetchApi("/api/workspace/watchlist");
+          const items: { id: string }[] = wl?.items ?? wl ?? [];
+          setIsWatched(items.some((item) => item.id === id));
+        } catch { /* watchlist check is non-critical */ }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("404") || msg.toLowerCase().includes("not found")) {
+          setNotFound(true);
+        } else {
+          setError("Failed to load IOC details.");
+        }
       } finally {
         setLoading(false);
       }
     }
-    loadData();
-  }, [unwrappedParams.id]);
+    load();
+  }, [id]);
 
+  /* ── Watchlist toggle ─────────────────────────────────────────────────── */
   const toggleWatchlist = async () => {
-    const nextState = !data.is_watched;
+    const next = !isWatched;
     try {
-      if (nextState) {
-        await fetchApi(`/api/workspace/watchlist`, { method: 'POST', body: JSON.stringify({ ioc_id: unwrappedParams.id }) });
+      if (next) {
+        await fetchApi("/api/workspace/watchlist", { method: "POST", body: JSON.stringify({ ioc_id: id }) });
       } else {
-        await fetchApi(`/api/workspace/watchlist/${unwrappedParams.id}`, { method: 'DELETE' });
+        await fetchApi(`/api/workspace/watchlist/${id}`, { method: "DELETE" });
       }
-      setData({ ...data, is_watched: nextState });
-    } catch {
-      setData({ ...data, is_watched: nextState });
-    }
+      setIsWatched(next);
+    } catch { setIsWatched(next); }
   };
 
-  const handleAddTag = async (tagStr: string) => {
-    if (!tagStr) return;
+  /* ── Tags ─────────────────────────────────────────────────────────────── */
+  const addTag = async (tag: string) => {
+    if (!tag || !data) return;
+    if (data.tags.some((t) => t.tag === tag)) return;
+    const optimistic: IOCTag = { id: `tmp-${Date.now()}`, tag, created_at: new Date().toISOString() };
+    setData({ ...data, tags: [...data.tags, optimistic] });
     try {
-      await fetchApi(`/api/iocs/${unwrappedParams.id}/tags`, {
-        method: 'POST',
-        body: JSON.stringify({ tag: tagStr })
-      });
-      if (!data.analyst_tags.includes(tagStr)) {
-        setData({...data, analyst_tags: [...data.analyst_tags, tagStr]});
-      }
-    } catch {
-      if (!data.analyst_tags.includes(tagStr)) {
-        setData({...data, analyst_tags: [...data.analyst_tags, tagStr]});
-      }
-    }
+      await fetchApi(`/api/iocs/${id}/tags`, { method: "POST", body: JSON.stringify({ tag }) });
+    } catch { /* optimistic update stays */ }
+    setNewTag("");
   };
 
-  const handleRemoveTag = async (tagStr: string) => {
+  const removeTag = async (tagId: string, tagStr: string) => {
+    if (!data) return;
+    setData({ ...data, tags: data.tags.filter((t) => t.id !== tagId) });
     try {
-      await fetchApi(`/api/iocs/${unwrappedParams.id}/tags/${tagStr}`, { method: 'DELETE' });
-      setData({...data, analyst_tags: data.analyst_tags.filter((t: string) => t !== tagStr)});
-    } catch {
-      setData({...data, analyst_tags: data.analyst_tags.filter((t: string) => t !== tagStr)});
-    }
+      await fetchApi(`/api/iocs/${id}/tags/${tagStr}`, { method: "DELETE" });
+    } catch { /* optimistic already applied */ }
   };
 
-  const handleAddNote = async (e: React.FormEvent) => {
+  /* ── Notes ─────────────────────────────────────────────────────────────── */
+  const addNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNote) return;
-    const noteObj = { id: Date.now(), text: newNote, date: new Date().toISOString() };
-    try {
-      await fetchApi(`/api/iocs/${unwrappedParams.id}/notes`, {
-        method: 'POST',
-        body: JSON.stringify({ text: newNote })
-      });
-      setData({...data, analyst_notes: [...data.analyst_notes, noteObj]});
-    } catch {
-      setData({...data, analyst_notes: [...data.analyst_notes, noteObj]});
-    }
+    if (!newNote.trim() || !data) return;
+    const now = new Date().toISOString();
+    const optimistic: IOCNote = { id: `tmp-${Date.now()}`, body: newNote, created_at: now, updated_at: now };
+    setData({ ...data, notes: [...data.notes, optimistic] });
     setNewNote("");
+    try {
+      await fetchApi(`/api/iocs/${id}/notes`, { method: "POST", body: JSON.stringify({ body: newNote }) });
+    } catch { /* optimistic update stays */ }
   };
 
-  const handleUpdateNote = async (id: number) => {
-    if (!editNoteText) return;
-    try {
-      await fetchApi(`/api/iocs/${unwrappedParams.id}/notes/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ text: editNoteText })
-      });
-      setData({
-        ...data, 
-        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-        analyst_notes: data.analyst_notes.map((n: any) => n.id === id ? { ...n, text: editNoteText } : n)
-      });
-    } catch {
-      setData({
-        ...data, 
-        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-        analyst_notes: data.analyst_notes.map((n: any) => n.id === id ? { ...n, text: editNoteText } : n)
-      });
-    }
+  const updateNote = async (noteId: string) => {
+    if (!editNoteText.trim() || !data) return;
+    setData({ ...data, notes: data.notes.map((n) => n.id === noteId ? { ...n, body: editNoteText } : n) });
     setEditingNoteId(null);
-  };
-
-  const handleDeleteNote = async (id: number) => {
     try {
-      await fetchApi(`/api/iocs/${unwrappedParams.id}/notes/${id}`, { method: 'DELETE' });
-      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-      setData({...data, analyst_notes: data.analyst_notes.filter((n: any) => n.id !== id)});
-    } catch {
-      /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-      setData({...data, analyst_notes: data.analyst_notes.filter((n: any) => n.id !== id)});
-    }
+      await fetchApi(`/api/iocs/${id}/notes/${noteId}`, { method: "PUT", body: JSON.stringify({ body: editNoteText }) });
+    } catch { /* optimistic */ }
   };
 
-  if (loading) return <div className="animate-pulse h-96 bg-card rounded-xl"></div>;
+  const deleteNote = async (noteId: string) => {
+    if (!data) return;
+    setData({ ...data, notes: data.notes.filter((n) => n.id !== noteId) });
+    try {
+      await fetchApi(`/api/iocs/${id}/notes/${noteId}`, { method: "DELETE" });
+    } catch { /* optimistic */ }
+  };
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-6xl mx-auto">
-      
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2 text-muted-foreground mb-2">
-            <button onClick={() => router.back()} className="hover:text-primary transition-colors flex items-center pr-2">
-              <ArrowLeft className="w-4 h-4 mr-1" /> Back
-            </button>
+  /* ── States ─────────────────────────────────────────────────────────────── */
+  if (loading) {
+    return (
+      <div className="space-y-5 max-w-6xl">
+        <Sk className="h-6 w-32" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div className="lg:col-span-2 space-y-4">
+            <Sk className="h-32" />
+            <Sk className="h-52" />
+            <Sk className="h-48" />
           </div>
-          <div className="flex items-center space-x-3">
-            <h1 className="text-3xl font-bold font-mono tracking-tight text-primary break-all">{data.value}</h1>
-            <Badge variant="outline" className="uppercase">{data.type}</Badge>
-          </div>
-          <div className="flex items-center space-x-4 mt-3 text-sm text-muted-foreground">
-            <div className="flex items-center"><Clock className="w-4 h-4 mr-1" /> First seen: {new Date(data.first_seen).toLocaleDateString()}</div>
-            <div className="flex items-center"><Clock className="w-4 h-4 mr-1" /> Last seen: {new Date(data.last_seen).toLocaleDateString()}</div>
+          <div className="space-y-4">
+            <Sk className="h-48" />
+            <Sk className="h-52" />
           </div>
         </div>
-        
-        <div className="flex items-center space-x-3">
-          <div className="text-right mr-2 hidden sm:block">
-            <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-1">Severity</div>
-            <div className="flex items-center justify-end space-x-2">
-              <span className={`text-3xl font-bold ${data.severity === 'critical' ? 'text-destructive' : 'text-primary'}`}>{data.score}</span>
-              <Badge variant={data.severity === 'critical' ? 'destructive' : 'secondary'} className="capitalize">
-                {data.severity}
-              </Badge>
+      </div>
+    );
+  }
+
+  if (notFound) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
+        <AlertTriangle className="w-10 h-10" style={{ color: "#f87171" }} />
+        <div>
+          <div className="font-semibold font-heading" style={{ color: "var(--foreground)" }}>IOC Not Found</div>
+          <div className="text-xs mt-1" style={{ color: "var(--muted-foreground)" }}>
+            The indicator <span className="font-mono">{id}</span> does not exist.
+          </div>
+        </div>
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs"
+          style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+        >
+          <ArrowLeft className="w-3.5 h-3.5" /> Go Back
+        </button>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div
+        className="flex items-center gap-3 px-5 py-4 rounded-lg border text-sm"
+        style={{ background: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)", color: "#f87171" }}
+      >
+        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+        {error ?? "Unknown error loading IOC."}
+      </div>
+    );
+  }
+
+  const sev = getSeverity(data.severity);
+
+  /* ── Render ─────────────────────────────────────────────────────────────── */
+  return (
+    <div className="space-y-5 max-w-6xl animate-in fade-in duration-400">
+
+      {/* ── Breadcrumb nav ─────────────────────────────────────────────── */}
+      <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--muted-foreground)" }}>
+        <button onClick={() => router.back()} className="flex items-center gap-1 hover:text-primary transition-colors">
+          <ArrowLeft className="w-3 h-3" /> Back
+        </button>
+        <ChevronRight className="w-3 h-3" />
+        <Link href="/search" className="hover:text-primary transition-colors">IOC Search</Link>
+        <ChevronRight className="w-3 h-3" />
+        <span className="font-mono truncate max-w-[200px]" style={{ color: "var(--foreground)" }}>{data.value}</span>
+      </div>
+
+      {/* ── IOC Header ─────────────────────────────────────────────────── */}
+      <div
+        className="rounded-lg border p-4 relative overflow-hidden"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div className="absolute inset-0 bg-grid-ops opacity-30 pointer-events-none" />
+        <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              {/* Type badge */}
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border ${TYPE_COLORS[data.type] ?? "bg-muted/20 text-muted-foreground border-muted/30"}`}
+              >
+                {data.type}
+              </span>
+              {/* Active/inactive */}
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] uppercase tracking-wider border ${data.is_active ? "bg-[#22c55e]/10 text-[#4ade80] border-[#22c55e]/20" : "bg-muted/10 text-muted-foreground border-muted/20"}`}
+              >
+                <span className={`w-1 h-1 rounded-full ${data.is_active ? "bg-[#22c55e] status-pulse" : "bg-muted-foreground"}`} />
+                {data.is_active ? "Active" : "Inactive"}
+              </span>
+            </div>
+
+            <h1
+              className="text-xl md:text-2xl font-bold break-all font-mono leading-tight"
+              style={{ color: "var(--primary)", fontFamily: "var(--font-mono)" }}
+            >
+              {data.value}
+            </h1>
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+              <div className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                First: {formatDate(data.first_seen)}
+              </div>
+              <div className="flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                Last: {formatDate(data.last_seen)}
+              </div>
+              <div className="flex items-center gap-1">
+                <Layers className="w-3 h-3" />
+                {data.source_count} source{data.source_count !== 1 ? "s" : ""}
+              </div>
             </div>
           </div>
-          
-          <div className="flex gap-2">
-            <Button variant={data.is_watched ? "secondary" : "outline"} size="lg" className="h-14 font-medium" onClick={toggleWatchlist}>
-              {data.is_watched ? <BookmarkCheck className="w-5 h-5 mr-2 text-primary" /> : <Bookmark className="w-5 h-5 mr-2" />}
-              {data.is_watched ? "Watched" : "Watch"}
-            </Button>
-            <Button size="lg" className="h-14" onClick={() => window.location.href = `/iocs/${unwrappedParams.id}/graph`}>
-                <Network className="w-5 h-5 mr-2" />
+
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {/* Severity block */}
+            <div
+              className={`flex flex-col items-center px-4 py-2.5 rounded-lg border ${sev.cls}`}
+              style={{ minWidth: "80px" }}
+            >
+              <span className="text-2xl font-bold tabular-nums font-heading leading-none">
+                {(data.severity ?? 0).toFixed(1)}
+              </span>
+              <span className="text-[9px] uppercase tracking-wider mt-1 font-semibold">
+                {sev.label}
+              </span>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={toggleWatchlist}
+                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all"
+                style={{
+                  background: isWatched ? "rgba(56,189,248,0.12)" : "var(--muted)",
+                  border: `1px solid ${isWatched ? "rgba(56,189,248,0.3)" : "var(--border)"}`,
+                  color: isWatched ? "var(--primary)" : "var(--muted-foreground)",
+                }}
+              >
+                {isWatched ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+                {isWatched ? "Watching" : "Watch"}
+              </button>
+              <Link
+                href={`/iocs/${id}/graph`}
+                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all"
+                style={{
+                  background: "rgba(56,189,248,0.08)",
+                  border: "1px solid rgba(56,189,248,0.2)",
+                  color: "var(--primary)",
+                }}
+              >
+                <Network className="w-3.5 h-3.5" />
                 Graph
-            </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Left Column: Details & Breakdown */}
-        <div className="space-y-6 lg:col-span-2">
-          
-          <Card>
-            <CardHeader className="bg-muted/30 border-b">
-              <CardTitle className="text-lg flex items-center"><ShieldAlert className="w-5 h-5 mr-2 text-primary" /> Multi-Source Score Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="grid md:grid-cols-3 gap-6">
-                <div>
-                  <div className="text-sm text-muted-foreground mb-1">Base Feed Confidence</div>
-                  <div className="text-2xl font-semibold">{data.score_breakdown.base_confidence}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground mb-1">Source Multiplier</div>
-                  <div className="text-2xl font-semibold flex items-center">
-                    x {data.score_breakdown.source_count_multiplier}
-                    <span className="text-xs ml-2 text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full">{data.observations.length} feeds</span>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground mb-1">Recency Factor</div>
-                  <div className="text-2xl font-semibold flex items-center">
-                    x {data.score_breakdown.recency_factor}
-                  </div>
-                </div>
+      {/* ── Main content grid ───────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+        {/* ── Left: Score + Sources ──────────────────────────────────── */}
+        <div className="lg:col-span-2 space-y-4">
+
+          {/* Score explanation */}
+          {data.score_explanation && Object.keys(data.score_explanation).length > 0 && (
+            <div
+              className="rounded-lg border overflow-hidden"
+              style={{ background: "var(--card)", borderColor: "var(--border)" }}
+            >
+              <div
+                className="flex items-center gap-2 px-4 py-3 border-b"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <ShieldAlert className="w-4 h-4" style={{ color: "var(--primary)" }} />
+                <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+                  Score Breakdown
+                </h2>
               </div>
-            </CardContent>
-          </Card>
+              <div className="p-4 grid sm:grid-cols-3 gap-4">
+                {Object.entries(data.score_explanation).map(([key, val]) => (
+                  <div key={key}>
+                    <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--muted-foreground)" }}>
+                      {key.replace(/_/g, " ")}
+                    </div>
+                    <div className="text-lg font-bold tabular-nums font-heading" style={{ color: "var(--foreground)" }}>
+                      {typeof val === "number" ? val.toFixed(typeof val === "number" && val < 10 ? 2 : 0) : String(val)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center"><CheckCircle2 className="w-5 h-5 mr-2 text-primary" /> Feed Observations ({data.observations.length})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Confidence</TableHead>
-                    <TableHead>Date Observed</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                  {data.observations.map((obs: any) => (
-                    <TableRow key={obs.id}>
-                      <TableCell className="font-medium">{obs.feed}</TableCell>
-                      <TableCell>{obs.confidence}%</TableCell>
-                      <TableCell>{new Date(obs.date).toLocaleString()}</TableCell>
-                    </TableRow>
+          {/* Feed Observations */}
+          <div
+            className="rounded-lg border overflow-hidden"
+            style={{ background: "var(--card)", borderColor: "var(--border)" }}
+          >
+            <div
+              className="flex items-center gap-2 px-4 py-3 border-b"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <Layers className="w-4 h-4" style={{ color: "var(--primary)" }} />
+              <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+                Feed Observations
+              </h2>
+              <span
+                className="ml-auto text-[10px] px-1.5 py-0.5 rounded tabular-nums"
+                style={{ background: "var(--muted)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+              >
+                {data.sources.length}
+              </span>
+            </div>
+            {data.sources.length === 0 ? (
+              <div
+                className="flex items-center justify-center h-24 text-xs"
+                style={{ color: "var(--muted-foreground)" }}
+              >
+                No feed observations recorded.
+              </div>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ borderBottom: `1px solid var(--border)` }}>
+                    {["Source Feed", "Confidence", "Ingested At", "Raw Score"].map((h) => (
+                      <th
+                        key={h}
+                        className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.sources.map((src, i) => (
+                    <tr
+                      key={src.id}
+                      style={{ borderBottom: i < data.sources.length - 1 ? `1px solid var(--border)` : undefined }}
+                    >
+                      <td className="px-4 py-2.5 font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+                        {src.feed_name}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {src.raw_score != null ? (
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-10 h-1.5 rounded-full overflow-hidden"
+                              style={{ background: "var(--muted)" }}
+                            >
+                              <div
+                                className="h-full rounded-full bg-[var(--primary)]"
+                                style={{ width: `${Math.min(src.raw_score, 100)}%` }}
+                              />
+                            </div>
+                            <span className="tabular-nums font-mono" style={{ color: "var(--foreground)" }}>
+                              {src.raw_score.toFixed(0)}%
+                            </span>
+                          </div>
+                        ) : (
+                          <span style={{ color: "var(--muted-foreground)" }}>—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 font-mono" style={{ color: "var(--muted-foreground)" }}>
+                        {formatDateTime(src.ingested_at)}
+                      </td>
+                      <td className="px-4 py-2.5 tabular-nums font-mono" style={{ color: "var(--muted-foreground)" }}>
+                        {src.raw_score?.toFixed(2) ?? "—"}
+                      </td>
+                    </tr>
                   ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                </tbody>
+              </table>
+            )}
+          </div>
 
+          {/* Metadata */}
+          {data.metadata && Object.keys(data.metadata).length > 0 && (
+            <div
+              className="rounded-lg border overflow-hidden"
+              style={{ background: "var(--card)", borderColor: "var(--border)" }}
+            >
+              <div
+                className="px-4 py-3 border-b text-sm font-semibold font-heading"
+                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+              >
+                Metadata
+              </div>
+              <div className="p-4">
+                <pre
+                  className="text-xs overflow-auto max-h-48 rounded p-3"
+                  style={{ background: "var(--muted)", color: "var(--muted-foreground)", fontFamily: "var(--font-mono)" }}
+                >
+                  {JSON.stringify(data.metadata, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Right Column: Analyst Workspace */}
-        <div className="space-y-6">
-          <Card className="border-primary/20 bg-primary/5 shadow-md">
-            <CardHeader className="pb-3 bg-card border-b border-primary/10 rounded-t-xl">
-              <CardTitle className="text-lg flex items-center"><Tag className="w-4 h-4 mr-2" /> Analyst Tags</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {data.analyst_tags.length === 0 ? <span className="text-xs text-muted-foreground italic">No tags added.</span> : null}
-                {data.analyst_tags.map((tag: string) => (
-                  <Badge key={tag} variant="secondary" className="px-2 py-1 flex items-center shadow-sm">
-                    {tag}
-                    <button onClick={() => handleRemoveTag(tag)} className="ml-1.5 text-muted-foreground hover:text-foreground outline-none">
-                      <X className="w-3 h-3 hover:text-destructive transition-colors" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-              
-              <div className="space-y-2 pt-2 border-t border-primary/10">
-                <Select onValueChange={(v) => handleAddTag(v as string)}>
-                  <SelectTrigger className="w-full bg-background">
-                    <SelectValue placeholder="Add predefined tag..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PREDEFINED_TAGS.map(t => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
-                <form onSubmit={(e) => { e.preventDefault(); handleAddTag(newTag); setNewTag(""); }} className="flex space-x-2">
-                  <Input size={1} value={newTag} onChange={e=>setNewTag(e.target.value)} placeholder="Custom tag..." className="bg-background" />
-                  <Button type="submit" variant="secondary" size="sm">Add</Button>
-                </form>
-              </div>
-            </CardContent>
-          </Card>
+        {/* ── Right: Analyst workspace ────────────────────────────────── */}
+        <div className="space-y-4">
 
-          <Card className="border-primary/20 bg-primary/5 shadow-md">
-            <CardHeader className="pb-3 bg-card border-b border-primary/10 rounded-t-xl">
-              <CardTitle className="text-lg flex items-center"><MessageSquare className="w-4 h-4 mr-2" /> Analyst Notes</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                {data.analyst_notes.length === 0 ? <span className="text-xs text-muted-foreground italic">No notes added.</span> : null}
-                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                {data.analyst_notes.map((note: any) => (
-                  <div key={note.id} className="bg-background border rounded-lg p-3 text-sm shadow-sm group">
-                    {editingNoteId === note.id ? (
-                      <div className="space-y-2">
-                         <Input value={editNoteText} onChange={(e) => setEditNoteText(e.target.value)} autoFocus className="h-8 text-sm" />
-                         <div className="flex space-x-2 justify-end">
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-green-500 hover:bg-green-500/10" onClick={() => handleUpdateNote(note.id)}>
-                               <Save className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingNoteId(null)}>
-                               <X className="w-3.5 h-3.5" />
-                            </Button>
-                         </div>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="whitespace-pre-wrap leading-relaxed">{note.text}</p>
-                        <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-                          <span>{new Date(note.date).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</span>
-                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center space-x-1">
-                            <button onClick={() => { setEditingNoteId(note.id); setEditNoteText(note.text); }} className="hover:text-primary"><Edit className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => handleDeleteNote(note.id)} className="hover:text-destructive"><Trash className="w-3.5 h-3.5" /></button>
+          {/* Tags */}
+          <div
+            className="rounded-lg border overflow-hidden"
+            style={{ background: "var(--card)", borderColor: "var(--border)" }}
+          >
+            <div
+              className="flex items-center gap-2 px-4 py-3 border-b"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <Tag className="w-4 h-4" style={{ color: "var(--primary)" }} />
+              <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+                Analyst Tags
+              </h2>
+            </div>
+            <div className="p-4 space-y-3">
+              {/* Current tags */}
+              <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+                {data.tags.length === 0 ? (
+                  <span className="text-[10px] italic" style={{ color: "var(--muted-foreground)" }}>No tags added.</span>
+                ) : (
+                  data.tags.map((t) => (
+                    <span
+                      key={t.id}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium"
+                      style={{
+                        background: "rgba(56,189,248,0.10)",
+                        border: "1px solid rgba(56,189,248,0.25)",
+                        color: "var(--primary)",
+                      }}
+                    >
+                      {t.tag}
+                      <button
+                        onClick={() => removeTag(t.id, t.tag)}
+                        className="ml-0.5 rounded-full opacity-60 hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+
+              {/* Predefined tags */}
+              <div
+                className="pt-2 border-t"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <div className="text-[9px] uppercase tracking-wider mb-1.5" style={{ color: "var(--muted-foreground)" }}>
+                  Quick add
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {PREDEFINED_TAGS.filter((p) => !data.tags.some((t) => t.tag === p)).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => addTag(p)}
+                      className="px-1.5 py-0.5 rounded text-[9px] transition-all hover:border-primary/50"
+                      style={{
+                        background: "var(--muted)",
+                        border: "1px solid var(--border)",
+                        color: "var(--muted-foreground)",
+                      }}
+                    >
+                      + {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom tag input */}
+              <form
+                onSubmit={(e) => { e.preventDefault(); addTag(newTag); }}
+                className="flex gap-1.5"
+              >
+                <input
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  placeholder="Custom tag…"
+                  className="flex-1 h-7 px-2 rounded text-xs border outline-none focus:border-primary transition-colors"
+                  style={{ background: "var(--input)", borderColor: "var(--border)", color: "var(--foreground)" }}
+                />
+                <button
+                  type="submit"
+                  className="h-7 px-2 rounded text-[10px] font-medium transition-all"
+                  style={{
+                    background: "rgba(56,189,248,0.12)",
+                    border: "1px solid rgba(56,189,248,0.25)",
+                    color: "var(--primary)",
+                  }}
+                >
+                  Add
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div
+            className="rounded-lg border overflow-hidden"
+            style={{ background: "var(--card)", borderColor: "var(--border)" }}
+          >
+            <div
+              className="flex items-center gap-2 px-4 py-3 border-b"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <MessageSquare className="w-4 h-4" style={{ color: "var(--primary)" }} />
+              <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+                Analyst Notes
+              </h2>
+            </div>
+            <div className="p-4 space-y-3">
+              {/* Notes list */}
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {data.notes.length === 0 ? (
+                  <span className="text-[10px] italic" style={{ color: "var(--muted-foreground)" }}>No notes added.</span>
+                ) : (
+                  data.notes.map((note) => (
+                    <div
+                      key={note.id}
+                      className="rounded p-2.5 group"
+                      style={{ background: "var(--muted)", border: "1px solid var(--border)" }}
+                    >
+                      {editingNoteId === note.id ? (
+                        <div className="space-y-1.5">
+                          <textarea
+                            value={editNoteText}
+                            onChange={(e) => setEditNoteText(e.target.value)}
+                            className="w-full text-xs p-1.5 rounded border outline-none resize-none"
+                            style={{ background: "var(--input)", borderColor: "var(--border)", color: "var(--foreground)", minHeight: "60px" }}
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-1">
+                            <button
+                              onClick={() => updateNote(note.id)}
+                              className="p-1 rounded transition-colors"
+                              style={{ color: "#4ade80" }}
+                            >
+                              <Save className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => setEditingNoteId(null)}
+                              className="p-1 rounded transition-colors"
+                              style={{ color: "var(--muted-foreground)" }}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
                           </div>
                         </div>
-                      </>
-                    )}
-                  </div>
-                ))}
+                      ) : (
+                        <>
+                          <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: "var(--foreground)" }}>
+                            {note.body}
+                          </p>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-[9px] font-mono" style={{ color: "var(--muted-foreground)" }}>
+                              {formatDateTime(note.created_at)}
+                            </span>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => { setEditingNoteId(note.id); setEditNoteText(note.body); }}
+                                className="p-1 rounded"
+                                style={{ color: "var(--muted-foreground)" }}
+                              >
+                                <Edit3 className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => deleteNote(note.id)}
+                                className="p-1 rounded"
+                                style={{ color: "#f87171" }}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
               </div>
-              <form onSubmit={handleAddNote} className="space-y-2 pt-2 border-t border-primary/10">
-                <Label htmlFor="note" className="text-xs text-muted-foreground">Add New Note</Label>
-                <div className="flex flex-col space-y-2">
-                  <Input id="note" value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Type your analysis here..." className="bg-background" autoComplete="off" />
-                  <Button type="submit" variant="default" size="sm" className="w-full">Save Note</Button>
-                </div>
+
+              {/* Add note */}
+              <form
+                onSubmit={addNote}
+                className="space-y-1.5 pt-2 border-t"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <textarea
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  placeholder="Add an analyst note…"
+                  className="w-full text-xs p-2 rounded border outline-none resize-none focus:border-primary transition-colors"
+                  style={{
+                    background: "var(--input)",
+                    borderColor: "var(--border)",
+                    color: "var(--foreground)",
+                    minHeight: "56px",
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={!newNote.trim()}
+                  className="w-full h-7 rounded text-[10px] font-medium disabled:opacity-40 transition-all"
+                  style={{
+                    background: "rgba(56,189,248,0.12)",
+                    border: "1px solid rgba(56,189,248,0.25)",
+                    color: "var(--primary)",
+                  }}
+                >
+                  Save Note
+                </button>
               </form>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

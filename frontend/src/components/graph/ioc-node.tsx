@@ -1,57 +1,69 @@
-import { Handle, Position, NodeProps } from '@xyflow/react';
-import { Fingerprint, Globe, Link as LinkIcon, Hash } from 'lucide-react';
+import { Handle, Position, NodeProps } from "@xyflow/react";
+import { Globe, Link as LinkIcon, Hash, Fingerprint } from "lucide-react";
+import { getSeverity } from "@/lib/utils";
 
-const typeConfig: Record<string, { icon: React.ElementType, color: string }> = {
-  ipv4: { icon: Globe, color: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
-  domain: { icon: LinkIcon, color: 'text-purple-500 bg-purple-500/10 border-purple-500/20' },
-  url: { icon: LinkIcon, color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20' },
-  hash: { icon: Hash, color: 'text-orange-500 bg-orange-500/10 border-orange-500/20' },
-  default: { icon: Fingerprint, color: 'text-gray-500 bg-gray-500/10 border-gray-500/20' }
-};
-
-const severityConfig: Record<string, string> = {
-  critical: 'bg-destructive/10 text-destructive border-destructive/20',
-  high: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
-  low: 'bg-green-500/10 text-green-500 border-green-500/20',
-  unknown: 'bg-muted text-muted-foreground border-border'
+const typeConfig: Record<string, { icon: React.ElementType; cls: string }> = {
+  ipv4:        { icon: Globe,    cls: "text-sky-400 bg-sky-500/10 border-sky-500/20" },
+  domain:      { icon: LinkIcon, cls: "text-violet-400 bg-violet-500/10 border-violet-500/20" },
+  url:         { icon: LinkIcon, cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+  hash_md5:    { icon: Hash,     cls: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
+  hash_sha1:   { icon: Hash,     cls: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
+  hash_sha256: { icon: Hash,     cls: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
+  default:     { icon: Fingerprint, cls: "text-slate-400 bg-slate-500/10 border-slate-500/20" },
 };
 
 export function IOCNode({ data }: NodeProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { value, type, severity, isRoot } = data as any;
-  const config = typeConfig[type] || typeConfig.default;
-  const Icon = config.icon;
-  const sevClass = severityConfig[severity] || severityConfig.unknown;
+  const cfg = typeConfig[type] ?? typeConfig.default;
+  const Icon = cfg.icon;
+  const sev = getSeverity(severity);
 
   return (
-    <div className={`
-      relative min-w-[240px] rounded-xl border shadow-sm
-      ${isRoot ? 'ring-2 ring-primary border-primary bg-primary/5' : 'bg-card border-border'}
-      text-card-foreground p-3 transition-colors hover:border-primary/50
-    `}>
-      <Handle type="target" position={Position.Top} className="w-2 h-2 rounded-sm bg-muted-foreground border-none" />
-      
-      <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-md border ${config.color}`}>
-          <Icon className="w-4 h-4" />
+    <div
+      className="relative min-w-[220px] rounded-lg p-3 transition-all"
+      style={{
+        background: isRoot ? "rgba(56,189,248,0.08)" : "var(--card)",
+        border: isRoot ? "1px solid rgba(56,189,248,0.35)" : "1px solid var(--border)",
+        boxShadow: isRoot ? "0 0 16px -4px rgba(56,189,248,0.2)" : "none",
+      }}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{ background: "var(--border)", border: "none", width: 6, height: 6 }}
+      />
+
+      <div className="flex items-center gap-2.5">
+        <div className={`p-1.5 rounded border flex-shrink-0 ${cfg.cls}`}>
+          <Icon className="w-3.5 h-3.5" />
         </div>
-        
+
         <div className="flex-1 min-w-0">
-          <div className="font-mono text-sm font-semibold truncate" title={value}>
-            {value.length > 25 ? value.substring(0, 25) + '...' : value}
+          <div
+            className="text-xs font-semibold truncate font-mono"
+            style={{ color: isRoot ? "var(--primary)" : "var(--foreground)", fontFamily: "var(--font-mono)" }}
+            title={value}
+          >
+            {value.length > 22 ? value.substring(0, 22) + "…" : value}
           </div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
-            {type}
+          <div className="text-[9px] uppercase tracking-wider mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+            {type.replace("hash_", "")}
           </div>
         </div>
-        
-        <div className={`text-[10px] px-2 py-0.5 rounded-full border uppercase font-medium ${sevClass}`}>
-          {severity}
-        </div>
+
+        <span
+          className={`text-[8px] px-1.5 py-0.5 rounded uppercase font-semibold border flex-shrink-0 ${sev.cls}`}
+        >
+          {sev.label}
+        </span>
       </div>
-      
-      <Handle type="source" position={Position.Bottom} className="w-2 h-2 rounded-sm bg-muted-foreground border-none" />
+
+      <Handle
+        type="source"
+        position={Position.Right}
+        style={{ background: "var(--border)", border: "none", width: 6, height: 6 }}
+      />
     </div>
   );
 }

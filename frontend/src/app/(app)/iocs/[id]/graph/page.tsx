@@ -1,105 +1,48 @@
 "use client";
 
-import { use, useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { fetchApi } from "@/lib/api.client";
 import { useRouter } from "next/navigation";
-import { ReactFlow, Background, Controls, Node, Edge, MarkerType, useNodesState, useEdgesState, ReactFlowProvider, Position } from "@xyflow/react";
+import {
+  ReactFlow, Background, Controls, Node, Edge,
+  MarkerType, useNodesState, useEdgesState,
+  ReactFlowProvider, Position, BackgroundVariant,
+} from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import dagre from 'dagre';
-
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, ArrowLeft, Loader2, Maximize2 } from "lucide-react";
+import dagre from "dagre";
 
 import { IOCNode } from "@/components/graph/ioc-node";
+import { AlertTriangle, ArrowLeft, Loader2, Maximize2, Network } from "lucide-react";
 
-const nodeTypes = {
-  ioc: IOCNode,
-};
+const nodeTypes = { ioc: IOCNode };
 
+/* ─── Layout engine ─────────────────────────────────────────────────────── */
 function getLayoutedElements(nodes: Node[], edges: Edge[]) {
-  const dagreGraph = new dagre.graphlib.Graph();
-  dagreGraph.setDefaultEdgeLabel(() => ({}));
-  
-  const nodeWidth = 260;
-  const nodeHeight = 80;
-  
-  dagreGraph.setGraph({ rankdir: 'LR', nodesep: 50, ranksep: 100 });
-  
-  nodes.forEach((node) => {
-    dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
-  });
-  
-  edges.forEach((edge) => {
-    dagreGraph.setEdge(edge.source, edge.target);
-  });
-  
-  dagre.layout(dagreGraph);
-  
-  const layoutedNodes = nodes.map((node) => {
-    const nodeWithPosition = dagreGraph.node(node.id);
-    return {
-      ...node,
-      position: {
-        x: nodeWithPosition.x - nodeWidth / 2,
-        y: nodeWithPosition.y - nodeHeight / 2,
-      },
-      targetPosition: Position.Left,
-      sourcePosition: Position.Right,
-    };
-  });
-
-  return { nodes: layoutedNodes, edges };
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: "LR", nodesep: 60, ranksep: 120 });
+  const nw = 260, nh = 80;
+  nodes.forEach((n) => g.setNode(n.id, { width: nw, height: nh }));
+  edges.forEach((e) => g.setEdge(e.source, e.target));
+  dagre.layout(g);
+  return {
+    nodes: nodes.map((n) => {
+      const pos = g.node(n.id);
+      return { ...n, position: { x: pos.x - nw / 2, y: pos.y - nh / 2 }, targetPosition: Position.Left, sourcePosition: Position.Right };
+    }),
+    edges,
+  };
 }
 
-/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-const generateMockGraph = (rootId: string, depth: number): { nodes: any[], edges: any[], truncated: boolean } => {
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  const nodes: any[] = [
-    { id: rootId, value: rootId === "ioc-1" ? "185.15.247.140" : rootId, type: "ipv4", severity: "critical", isRoot: true }
-  ];
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  const edges: any[] = [];
-  
-  if (depth >= 1) {
-    nodes.push(
-      { id: "domain-1", value: "mal-login.com", type: "domain", severity: "high" },
-      { id: "hash-1", value: "e3b0c442...bb1", type: "hash", severity: "medium" }
-    );
-    edges.push(
-      { source: rootId, target: "domain-1", label: "resolves_to" },
-      { source: rootId, target: "hash-1", label: "drops" }
-    );
-  }
-  if (depth >= 2) {
-    nodes.push(
-      { id: "ip-2", value: "11.22.33.44", type: "ipv4", severity: "high" },
-      { id: "url-1", value: "http://example.com/api", type: "url", severity: "low" }
-    );
-    edges.push(
-      { source: "domain-1", target: "ip-2", label: "hosted_on" },
-      { source: "hash-1", target: "url-1", label: "downloads_from" }
-    );
-  }
-  if (depth >= 3) {
-    nodes.push(
-      { id: "hash-2", value: "ffffc442...bb2", type: "hash", severity: "critical" },
-    );
-    edges.push(
-      { source: "url-1", target: "hash-2", label: "serves_payload" }
-    );
-  }
-  
-  return { nodes, edges, truncated: depth >= 3 }; 
-};
-
-function GraphFlow({ rootId }: { rootId: string }) {
+/* ─── Graph canvas ──────────────────────────────────────────────────────── */
+function GraphCanvas({ rootId }: { rootId: string }) {
   const router = useRouter();
   const [depth, setDepth] = useState("1");
   const [loading, setLoading] = useState(true);
   const [isTruncated, setIsTruncated] = useState(false);
-  
+  const [nodeCount, setNodeCount] = useState(0);
+  const [isEmpty, setIsEmpty] = useState(false);
+
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
@@ -107,93 +50,130 @@ function GraphFlow({ rootId }: { rootId: string }) {
     async function loadGraph() {
       setLoading(true);
       try {
-        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-        let res: any;
-        try {
-           res = await fetchApi(`/api/iocs/${rootId}/graph?depth=${depth}`);
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (e) {
-           res = generateMockGraph(rootId, parseInt(depth));
+        const res = await fetchApi(`/api/iocs/${rootId}/graph?depth=${depth}`);
+
+        if (!res.nodes || res.nodes.length === 0) {
+          setIsEmpty(true);
+          setNodes([]);
+          setEdges([]);
+          return;
         }
-        
-        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-        const initialNodes: Node[] = res.nodes.map((n: any) => ({
-          id: n.id,
-          type: 'ioc',
-          data: { 
-            value: n.value, 
-            type: n.type, 
-            severity: n.severity, 
-            isRoot: n.id === rootId 
-          },
-          position: { x: 0, y: 0 } // handled by layout
+
+        setIsEmpty(false);
+        setNodeCount(res.nodes.length);
+
+        const initialNodes: Node[] = res.nodes.map((n: { id: string; value: string; type: string; severity: number }) => ({
+          id: String(n.id),
+          type: "ioc",
+          data: { value: n.value, type: n.type, severity: n.severity, isRoot: String(n.id) === rootId },
+          position: { x: 0, y: 0 },
         }));
-        
-        /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-        const initialEdges: Edge[] = res.edges.map((e: any) => ({
-          id: `${e.source}-${e.target}-${e.label}`,
-          source: e.source,
-          target: e.target,
-          label: e.label,
-          type: 'smoothstep',
+
+        const initialEdges: Edge[] = res.edges.map((e: { id: string; source: string; target: string; relationship: string; confidence: number | null }) => ({
+          id: String(e.id),
+          source: String(e.source),
+          target: String(e.target),
+          label: e.relationship,
+          type: "smoothstep",
           animated: true,
-          style: { stroke: 'hsl(var(--primary))', strokeWidth: 1.5 },
-          labelStyle: { fill: 'hsl(var(--foreground))', fontWeight: 500, fontSize: 10 },
-          labelBgStyle: { fill: 'hsl(var(--background))', fillOpacity: 0.8 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))' },
+          style: { stroke: "rgba(56,189,248,0.6)", strokeWidth: 1.5 },
+          labelStyle: { fill: "#94a3b8", fontWeight: 500, fontSize: 9 },
+          labelBgStyle: { fill: "var(--background)", fillOpacity: 0.9 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: "rgba(56,189,248,0.6)" },
         }));
 
-        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(initialNodes, initialEdges);
-        
-        setNodes(layoutedNodes);
-        setEdges(layoutedEdges);
-        setIsTruncated(res.truncated || false);
-
+        const { nodes: ln, edges: le } = getLayoutedElements(initialNodes, initialEdges);
+        setNodes(ln);
+        setEdges(le);
+        setIsTruncated(res.truncated ?? false);
       } catch {
-        // failed entirely
+        setIsEmpty(true);
       } finally {
         setLoading(false);
       }
     }
-    
     loadGraph();
   }, [rootId, depth, setNodes, setEdges]);
 
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  const onNodeClick = useCallback((_: any, node: Node) => {
+  const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     router.push(`/iocs/${node.id}`);
   }, [router]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-10rem)] w-full relative group">
-      {/* Top Bar Controls */}
-      <div className="absolute top-4 left-4 z-10 flex space-x-2">
-        <Select value={depth} onValueChange={(v) => setDepth(v || "1")}>
-          <SelectTrigger className="w-[140px] bg-background/90 backdrop-blur-sm border-primary/20 shadow-lg">
-            <SelectValue placeholder="Depth" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="1">1 Hop (Direct)</SelectItem>
-            <SelectItem value="2">2 Hops</SelectItem>
-            <SelectItem value="3">3 Hops (Max)</SelectItem>
-          </SelectContent>
-        </Select>
+    <div className="relative flex-1 w-full" style={{ height: "calc(100vh - 12rem)" }}>
+      {/* Depth selector */}
+      <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+        <div
+          className="flex items-center gap-0 rounded-lg border overflow-hidden text-xs"
+          style={{ background: "var(--card)", borderColor: "var(--border)" }}
+        >
+          {[
+            { v: "1", label: "1 Hop" },
+            { v: "2", label: "2 Hops" },
+            { v: "3", label: "3 Hops" },
+          ].map(({ v, label }) => (
+            <button
+              key={v}
+              onClick={() => setDepth(v)}
+              className="px-3 py-1.5 transition-colors"
+              style={{
+                background: depth === v ? "rgba(56,189,248,0.15)" : "transparent",
+                color: depth === v ? "var(--primary)" : "var(--muted-foreground)",
+                borderRight: v !== "3" ? `1px solid var(--border)` : undefined,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {nodeCount > 0 && (
+          <div
+            className="text-[10px] px-2 py-1 rounded"
+            style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+          >
+            {nodeCount} nodes
+          </div>
+        )}
       </div>
 
+      {/* Truncated warning */}
       {isTruncated && (
-        <div className="absolute top-4 right-4 z-10 bg-destructive/10 border-destructive/30 text-destructive text-xs py-2 px-3 rounded-md flex items-center shadow-lg backdrop-blur-sm">
-          <AlertTriangle className="w-4 h-4 mr-2" />
-          Graph truncated at 100 nodes. Expand search to resolve deeper connections.
+        <div
+          className="absolute top-3 right-3 z-10 flex items-center gap-2 px-3 py-2 rounded text-xs"
+          style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171" }}
+        >
+          <AlertTriangle className="w-3.5 h-3.5" />
+          Graph truncated at 100 nodes
         </div>
       )}
 
+      {/* Loading */}
       {loading && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/50 backdrop-blur-sm">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center"
+          style={{ background: "rgba(7,13,24,0.6)", backdropFilter: "blur(4px)" }}
+        >
+          <Loader2 className="w-7 h-7 animate-spin" style={{ color: "var(--primary)" }} />
         </div>
       )}
 
-      <Card className="flex-1 w-full h-full overflow-hidden border border-border shadow-inner relative bg-dot-pattern">
+      {/* Empty state */}
+      {!loading && isEmpty && (
+        <div
+          className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          <Network className="w-12 h-12 opacity-20" />
+          <div className="text-sm font-heading">No relationships found</div>
+          <div className="text-xs">This IOC has no mapped connections in the database.</div>
+        </div>
+      )}
+
+      {/* React Flow */}
+      <div
+        className="w-full h-full rounded-lg border overflow-hidden"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -205,40 +185,68 @@ function GraphFlow({ rootId }: { rootId: string }) {
           minZoom={0.2}
           maxZoom={4}
           proOptions={{ hideAttribution: true }}
-          className="dark bg-background/95 hover:cursor-grab active:cursor-grabbing"
+          className="hover:cursor-grab active:cursor-grabbing"
         >
-          <Background color="hsl(var(--muted-foreground))" gap={20} size={1} />
-          <Controls className="fill-foreground stroke-border bg-card border-border shadow-xl !rounded-md overflow-hidden" showInteractive={false} />
+          <Background
+            variant={BackgroundVariant.Dots}
+            color="rgba(56,189,248,0.07)"
+            gap={20}
+            size={1}
+          />
+          <Controls
+            style={{
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "6px",
+              overflow: "hidden",
+            }}
+            showInteractive={false}
+          />
         </ReactFlow>
-      </Card>
-      
-      <div className="absolute bottom-4 left-4 z-10 text-xs text-muted-foreground flex items-center bg-background/80 px-2 py-1 rounded-md backdrop-blur-sm">
-        <Maximize2 className="w-3 h-3 mr-1" /> scroll to zoom, click + drag to pan
+      </div>
+
+      {/* Hint */}
+      <div
+        className="absolute bottom-3 left-3 z-10 flex items-center gap-1.5 text-[10px] px-2 py-1 rounded"
+        style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+      >
+        <Maximize2 className="w-2.5 h-2.5" />
+        Scroll to zoom · drag to pan · click node to open
       </div>
     </div>
   );
 }
 
-export default function GraphViewPage({ params }: { params: Promise<{ id: string }> }) {
-  const unwrappedParams = use(params);
-  
+/* ─── Page wrapper ──────────────────────────────────────────────────────── */
+// Next.js 14: params is a plain object (not a Promise)
+export default function GraphViewPage({ params }: { params: { id: string } }) {
+  const { id } = params;
+
   return (
-    <div className="space-y-4 animate-in fade-in duration-500 w-full">
-      <div className="flex items-center space-x-2 text-muted-foreground mb-4">
-        <Button variant="ghost" size="sm" className="hover:text-primary pl-0" onClick={() => window.location.href = `/iocs/${unwrappedParams.id}`}>
-             <ArrowLeft className="w-4 h-4 mr-1" /> Back to IOC Details
-        </Button>
-      </div>
-      
-      <div className="flex border-b pb-4 items-center justify-between">
+    <div className="flex flex-col h-full space-y-4 animate-in fade-in duration-400">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => window.history.back()}
+            className="flex items-center gap-1.5 text-xs transition-colors"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="hover:underline" style={{ color: "var(--primary)" }}>Back to IOC</span>
+          </button>
+        </div>
         <div>
-           <h1 className="text-2xl font-bold tracking-tight">Threat Relationship Graph</h1>
-           <p className="text-muted-foreground text-sm mt-1">Explore interactive associations for node: <span className="font-mono text-primary font-medium">{unwrappedParams.id}</span></p>
+          <h1 className="text-lg font-bold font-heading" style={{ color: "var(--foreground)" }}>
+            Threat Relationship Graph
+          </h1>
+          <p className="text-[10px] text-right" style={{ color: "var(--muted-foreground)" }}>
+            Root: <span className="font-mono" style={{ color: "var(--primary)" }}>{id}</span>
+          </p>
         </div>
       </div>
 
       <ReactFlowProvider>
-        <GraphFlow rootId={unwrappedParams.id} />
+        <GraphCanvas rootId={id} />
       </ReactFlowProvider>
     </div>
   );
