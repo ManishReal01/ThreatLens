@@ -31,11 +31,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Upsert logic enforces a `(value, type)` unique constraint — ingesting the same IOC twice from the same feed leaves exactly one canonical row
   4. Severity score columns and formula inputs (feed confidence weight, source count weight, recency weight) are defined in schema; score can be computed and stored on upsert
   5. `ioc_relationships` adjacency table is present with indexes on both FKs; co-occurrence inference logic is defined before any worker runs
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: PostgreSQL schema migrations (all tables, indexes, constraints, user_id FKs)
-- [ ] 01-02: NormalizedIOC struct, per-feed adapter interfaces, upsert logic, severity scoring formula
+- [ ] 01-01-PLAN.md — Backend scaffolding, all ORM models, Alembic migration (8 tables, all indexes/constraints), pytest infrastructure
+- [ ] 01-02-PLAN.md — NormalizedIOC struct, canonicalization, severity scoring, upsert logic, co-occurrence inference, full test suite
 
 ### Phase 2: Feed Ingestion Pipeline
 **Goal**: Real IOC data flows continuously from all three feeds into the database — rate limits respected, failures logged, data deduplicated

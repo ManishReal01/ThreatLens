@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/opt/homebrew/bin/node \"/Users/manish/.claude/get-shit-done/bin/gsd-tools.cjs\" commit \"docs: initialize project\" --files .planning/PROJECT.md)",
+      "Bash(/opt/homebrew/bin/node \"/Users/manish/.claude/get-shit-done/bin/gsd-tools.cjs\" commit \"chore: add project config\" --files .planning/config.json)",
+      "Bash(node:*)",
+      "Bash(/opt/homebrew/bin/node \"/Users/manish/.claude/get-shit-done/bin/gsd-tools.cjs\" commit \"docs: complete project research\" --files .planning/research/)",
+      "Bash(/opt/homebrew/bin/node \"/Users/manish/.claude/get-shit-done/bin/gsd-tools.cjs\" commit \"docs: define v1 requirements\" --files .planning/REQUIREMENTS.md)",
+      "Bash(/opt/homebrew/bin/node \"/Users/manish/.claude/get-shit-done/bin/gsd-tools.cjs\" commit \"docs: create roadmap \\(6 phases\\)\" --files .planning/ROADMAP.md .planning/STATE.md .planning/REQUIREMENTS.md)"
+    ]
+  }
+}
