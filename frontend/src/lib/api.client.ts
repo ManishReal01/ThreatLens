@@ -8,6 +8,9 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
   if (session?.access_token) {
     headers.set("Authorization", `Bearer ${session.access_token}`);
   }
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   
   const res = await fetch(endpoint, {
     ...options,
