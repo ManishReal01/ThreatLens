@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     test_database_url: str = "sqlite+aiosqlite:///./test.db"
     supabase_url: str = ""
     supabase_service_role_key: str = ""
+    # JWT secret from Supabase dashboard → Settings → API → JWT Secret
+    supabase_jwt_secret: str = ""
 
     # Feed API keys (empty string = feed disabled; worker skips if not configured)
     abuseipdb_api_key: str = ""
