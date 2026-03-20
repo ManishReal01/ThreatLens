@@ -1,0 +1,11 @@
+sqlalchemy[asyncio]==2.0.48
+asyncpg==0.31.0
+alembic==1.16.5
+pydantic[email]==2.12.5
+pydantic-settings==2.11.0
+tldextract==5.3.0
+python-dotenv==1.1.0
+pytest==8.3.5
+pytest-asyncio==0.25.3
+pytest-cov==6.1.1
+aiosqlite==0.21.0
