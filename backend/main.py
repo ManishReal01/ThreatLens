@@ -5,7 +5,9 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routers import feeds, iocs
 from app.config import settings
 from app.feeds.scheduler import create_scheduler
 
@@ -35,6 +37,18 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# CORS — tighten allow_origins to your frontend URL in production
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(iocs.router)
+app.include_router(feeds.router)
 
 
 @app.get("/health", tags=["ops"])
