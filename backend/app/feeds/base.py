@@ -7,7 +7,12 @@ from typing import ClassVar, Optional
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
-from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_random_exponential
+from tenacity import (
+    AsyncRetrying,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_random_exponential,
+)
 
 from app.config import Settings
 from app.models.feed_run import FeedRunModel

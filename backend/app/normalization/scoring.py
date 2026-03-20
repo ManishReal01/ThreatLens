@@ -1,6 +1,5 @@
 """Severity scoring formula with exponential recency decay."""
 import math
-from typing import Dict
 
 from pydantic import BaseModel
 
@@ -12,7 +11,7 @@ CURRENT_SCORE_VERSION: int = 1
 
 class SeverityResult(BaseModel):
     score: float
-    explanation: Dict
+    explanation: dict
 
 
 def compute_severity(
@@ -36,7 +35,7 @@ def compute_severity(
 
     total = round(confidence_component + source_component + recency_component, 2)
 
-    explanation: Dict = {
+    explanation: dict = {
         "confidence_component": round(confidence_component, 4),
         "source_count_component": round(source_component, 4),
         "recency_component": round(recency_component, 4),

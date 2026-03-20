@@ -6,8 +6,6 @@ SQLite path (used in tests) uses SELECT-then-INSERT/UPDATE within the same trans
 import uuid
 from datetime import datetime, timezone
 from itertools import combinations
-from typing import List, Optional, Tuple
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,7 +39,7 @@ def _dialect_name(session: AsyncSession) -> str:
 async def upsert_ioc(
     session: AsyncSession,
     ioc: NormalizedIOC,
-) -> Tuple[str, bool]:
+) -> tuple[str, bool]:
     """Upsert an IOC row and always create an ioc_sources row.
 
     Returns (ioc_id: str, is_new: bool).
@@ -72,7 +70,7 @@ async def _upsert_postgresql(
     session: AsyncSession,
     ioc: NormalizedIOC,
     canonical_value: str,
-) -> Tuple[str, bool]:
+) -> tuple[str, bool]:
     from sqlalchemy import func, literal_column
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -119,7 +117,7 @@ async def _upsert_sqlite(
     session: AsyncSession,
     ioc: NormalizedIOC,
     canonical_value: str,
-) -> Tuple[str, bool]:
+) -> tuple[str, bool]:
     """SQLite-compatible SELECT-then-INSERT/UPDATE upsert."""
     result = await session.execute(
         select(IOCModel).where(
@@ -168,7 +166,7 @@ async def _upsert_sqlite(
 
 async def infer_cooccurrence_relationships(
     session: AsyncSession,
-    ioc_ids: List[str],
+    ioc_ids: list[str],
     inferred_by: str,
     confidence: float = 0.7,
 ) -> int:

@@ -1,6 +1,6 @@
 """NormalizedIOC Pydantic model — contract every feed adapter must produce."""
 from enum import Enum
-from typing import Dict, Optional
+from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -19,8 +19,8 @@ class NormalizedIOC(BaseModel):
     ioc_type: IOCType
     raw_confidence: float
     feed_name: str
-    raw_payload: Dict
-    metadata: Dict = {}
+    raw_payload: dict
+    metadata: dict = {}
     feed_run_id: Optional[str] = None
 
     @field_validator("raw_confidence")
