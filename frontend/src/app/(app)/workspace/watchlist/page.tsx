@@ -2,161 +2,325 @@
 
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api.client";
-import { Card } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Bookmark, Loader2, Download, FileJson, BookmarkMinus } from "lucide-react";
+import { getSeverity, formatRelativeTime, formatDate } from "@/lib/utils";
+import {
+  Bookmark, Loader2, Download, FileJson, BookmarkMinus,
+  AlertTriangle, Shield,
+} from "lucide-react";
 import Link from "next/link";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-const MOCK_WATCHLIST = [
-  { id: "ioc-1", value: "185.15.247.140", type: "ipv4", severity: "critical", score: 98, last_seen: new Date().toISOString(), tags: ["c2-server", "apt29"], is_watched: true },
-  { id: "ioc-3", value: "http://example.com/payload.exe", type: "url", severity: "high", score: 79, last_seen: new Date().toISOString(), tags: ["malware"], is_watched: true },
-];
+/* ─── Types ─────────────────────────────────────────────────────────────── */
+interface WatchedIOC {
+  id: string;
+  value: string;
+  type: string;
+  severity: number | null;
+  first_seen: string;
+  last_seen: string;
+  source_count: number;
+  is_active: boolean;
+  tags?: { id: string; tag: string }[];
+}
 
+/* ─── Subcomponents ─────────────────────────────────────────────────────── */
+const TYPE_COLORS: Record<string, string> = {
+  ipv4:        "bg-sky-500/10 text-sky-400 border-sky-500/20",
+  domain:      "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  url:         "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  hash_md5:    "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  hash_sha1:   "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  hash_sha256: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+};
+
+function TypeBadge({ type }: { type: string }) {
+  const cls = TYPE_COLORS[type] ?? "bg-muted/20 text-muted-foreground border-muted/30";
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border ${cls}`}>
+      {type.replace("hash_", "")}
+    </span>
+  );
+}
+
+function SevBadge({ score }: { score: number | null | undefined }) {
+  const sev = getSeverity(score);
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-semibold border ${sev.cls}`}>
+      <span className={`w-1 h-1 rounded-full ${sev.dotCls}`} />
+      {sev.label}
+    </span>
+  );
+}
+
+/* ─── Main page ─────────────────────────────────────────────────────────── */
 export default function WatchlistPage() {
-  const [data, setData] = useState(MOCK_WATCHLIST);
+  const [data, setData] = useState<WatchedIOC[]>([]);
   const [loading, setLoading] = useState(true);
-  
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    async function init() {
+    async function load() {
       try {
         const res = await fetchApi("/api/workspace/watchlist");
-        if (res && res.items) setData(res.items);
-      } catch {
-        // Fallback
+        // Handle both { items: [] } and plain array
+        const items: WatchedIOC[] = Array.isArray(res) ? res : (res?.items ?? []);
+        setData(items);
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load watchlist.");
       } finally {
         setLoading(false);
       }
     }
-    init();
+    load();
   }, []);
 
+  const remove = async (e: React.MouseEvent, iocId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setData((prev) => prev.filter((item) => item.id !== iocId));
+    try {
+      await fetchApi(`/api/workspace/watchlist/${iocId}`, { method: "DELETE" });
+    } catch { /* optimistic already applied */ }
+  };
+
+  /* ── Exports ─────────────────────────────────────────────────────────── */
   const handleExportCSV = () => {
-    const headers = ["Indicator", "Type", "Severity", "Tags", "Observed Date"];
-    const rows = data.map(item => [
-      item.value, 
-      item.type, 
-      item.severity, 
-      (item.tags || []).join("; "), 
-      new Date(item.last_seen).toLocaleDateString()
+    const headers = ["Indicator", "Type", "Severity Score", "Severity Label", "Tags", "First Seen", "Last Seen"];
+    const rows = data.map((item) => [
+      `"${item.value}"`,
+      item.type,
+      item.severity ?? "",
+      getSeverity(item.severity).label,
+      (item.tags ?? []).map((t) => t.tag).join("; "),
+      formatDate(item.first_seen),
+      formatDate(item.last_seen),
     ]);
-    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `threatlens-watchlist-${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = `threatlens-watchlist-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
   };
 
   const handleExportJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
     const link = document.createElement("a");
-    link.href = dataStr;
-    link.download = `threatlens-watchlist-${new Date().toISOString().slice(0,10)}.json`;
+    link.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+    link.download = `threatlens-watchlist-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
   };
 
-  const removeFromWatchlist = async (e: React.MouseEvent, iocId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try {
-      await fetchApi(`/api/workspace/watchlist/${iocId}`, { method: 'DELETE' });
-      setData(data.filter(item => item.id !== iocId));
-    } catch {
-      setData(data.filter(item => item.id !== iocId));
-    }
-  };
-
+  /* ── Render ──────────────────────────────────────────────────────────── */
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-end">
+    <div className="space-y-4 animate-in fade-in duration-400">
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center"><Bookmark className="w-8 h-8 mr-3 text-primary" fill="currentColor" /> Analyst Watchlist</h1>
-          <p className="text-muted-foreground mt-1">Personal indicators actively monitored.</p>
+          <h1 className="text-2xl font-bold font-heading tracking-tight flex items-center gap-2" style={{ color: "var(--foreground)" }}>
+            <Bookmark className="w-5 h-5" style={{ color: "var(--primary)" }} fill="currentColor" />
+            Analyst Watchlist
+          </h1>
+          <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+            Personal indicators under active monitoring
+          </p>
         </div>
-        
-        <DropdownMenu>
-          {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-          {/* @ts-expect-error type missing */}
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <Download className="w-4 h-4 mr-2" /> Export
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleExportCSV}>
-               <span className="font-medium flex items-center">Download as CSV</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleExportJSON}>
-               <span className="font-medium flex items-center"><FileJson className="w-4 h-4 mr-2 text-muted-foreground" /> Download as JSON</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            disabled={data.length === 0}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium disabled:opacity-40 transition-all"
+            style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+          >
+            <Download className="w-3 h-3" /> CSV
+          </button>
+          <button
+            onClick={handleExportJSON}
+            disabled={data.length === 0}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium disabled:opacity-40 transition-all"
+            style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+          >
+            <FileJson className="w-3 h-3" /> JSON
+          </button>
+        </div>
       </div>
 
-      <Card>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Indicator</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Severity</TableHead>
-                <TableHead>Workspace Tags</TableHead>
-                <TableHead className="text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
-                  </TableCell>
-                </TableRow>
-              ) : data.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
-                    Your watchlist is empty. Bookmark IOCs from their detail pages.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data.map((ioc) => (
-                  <TableRow key={ioc.id} className="cursor-pointer hover:bg-muted/50 transition-colors">
-                    <TableCell>
-                      <Link href={`/iocs/${ioc.id}`} className="font-mono text-sm font-medium text-primary hover:underline flex items-center w-full h-full">
-                         {ioc.value}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="uppercase text-[10px] tracking-wider">{ioc.type}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={ioc.severity === 'critical' ? 'destructive' : 'secondary'} className="capitalize">
-                        {ioc.severity}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(ioc.tags || []).slice(0, 3).map((tag: string) => (
-                          <Badge key={tag} variant="secondary" className="px-1.5 text-[10px]">{tag}</Badge>
-                        ))}
-                        {(ioc.tags || []).length > 3 && <Badge variant="secondary" className="px-1.5 text-[10px]">+{ioc.tags.length - 3}</Badge>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={(e) => removeFromWatchlist(e, ioc.id)}>
-                          <BookmarkMinus className="w-4 h-4" />
-                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+      {/* Stats strip */}
+      {!loading && data.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          {(["Critical", "High", "Medium", "Low"] as const).map((label) => {
+            const count = data.filter((ioc) => getSeverity(ioc.severity).label === label).length;
+            if (count === 0) return null;
+            const sev = getSeverity(label === "Critical" ? 9.5 : label === "High" ? 7.5 : label === "Medium" ? 5.0 : 2.0);
+            return (
+              <div
+                key={label}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-medium border ${sev.cls}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${sev.dotCls}`} />
+                {count} {label}
+              </div>
+            );
+          })}
         </div>
-      </Card>
+      )}
+
+      {/* Table */}
+      <div
+        className="rounded-lg border overflow-hidden"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        {/* Error */}
+        {error && (
+          <div
+            className="flex items-center gap-2 px-4 py-8 text-xs"
+            style={{ color: "#f87171" }}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            {error}
+          </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center h-32">
+            <Loader2 className="w-5 h-5 animate-spin" style={{ color: "var(--primary)" }} />
+          </div>
+        )}
+
+        {/* Empty */}
+        {!loading && !error && data.length === 0 && (
+          <div
+            className="flex flex-col items-center justify-center h-40 gap-3 text-xs"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            <Shield className="w-10 h-10 opacity-15" />
+            <div className="text-sm font-heading font-medium" style={{ color: "var(--foreground)" }}>
+              Watchlist is empty
+            </div>
+            <div className="text-center max-w-[260px]">
+              Bookmark IOCs from their detail pages to track them here.
+            </div>
+            <Link
+              href="/search"
+              className="mt-1 px-3 py-1.5 rounded text-xs font-medium transition-all"
+              style={{
+                background: "rgba(56,189,248,0.10)",
+                border: "1px solid rgba(56,189,248,0.25)",
+                color: "var(--primary)",
+              }}
+            >
+              Search IOCs →
+            </Link>
+          </div>
+        )}
+
+        {/* Data */}
+        {!loading && data.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ borderBottom: `1px solid var(--border)` }}>
+                  {["Indicator", "Type", "Score", "Severity", "Tags", "Last Seen", ""].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold"
+                      style={{ color: "var(--muted-foreground)" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((ioc, i) => {
+                  const sev = getSeverity(ioc.severity);
+                  return (
+                    <tr
+                      key={ioc.id}
+                      className="group transition-colors"
+                      style={{
+                        borderBottom: i < data.length - 1 ? `1px solid var(--border)` : undefined,
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+                    >
+                      <td className="px-4 py-2.5">
+                        <Link
+                          href={`/iocs/${ioc.id}`}
+                          className="font-mono font-medium hover:underline truncate max-w-[200px] block"
+                          style={{ color: "var(--primary)", fontFamily: "var(--font-mono)" }}
+                        >
+                          {ioc.value}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <TypeBadge type={ioc.type} />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-12 h-1.5 rounded-full overflow-hidden"
+                            style={{ background: "var(--muted)" }}
+                          >
+                            <div
+                              className={`h-full rounded-full ${sev.barCls}`}
+                              style={{ width: `${((ioc.severity ?? 0) / 10) * 100}%` }}
+                            />
+                          </div>
+                          <span className="tabular-nums font-mono" style={{ color: "var(--foreground)" }}>
+                            {(ioc.severity ?? 0).toFixed(1)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <SevBadge score={ioc.severity} />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex flex-wrap gap-1">
+                          {(ioc.tags ?? []).slice(0, 3).map((t) => (
+                            <span
+                              key={t.id}
+                              className="px-1.5 py-0.5 rounded text-[9px]"
+                              style={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.2)", color: "var(--primary)" }}
+                            >
+                              {t.tag}
+                            </span>
+                          ))}
+                          {(ioc.tags ?? []).length > 3 && (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[9px]"
+                              style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+                            >
+                              +{(ioc.tags ?? []).length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5 font-mono" style={{ color: "var(--muted-foreground)" }}>
+                        {formatRelativeTime(ioc.last_seen)}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <button
+                          onClick={(e) => remove(e, ioc.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded transition-all"
+                          style={{ color: "var(--muted-foreground)" }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted-foreground)")}
+                          title="Remove from watchlist"
+                        >
+                          <BookmarkMinus className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
