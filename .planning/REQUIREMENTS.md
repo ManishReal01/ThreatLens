@@ -103,22 +103,16 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | Pending |
-| AUTH-02 | Phase 1 | Pending |
-| AUTH-03 | Phase 1 | Pending |
-| AUTH-04 | Phase 1 | Pending |
-| AUTH-05 | Phase 1 | Pending |
+| IOC-01 | Phase 1 | Pending |
+| IOC-02 | Phase 1 | Pending |
+| IOC-03 | Phase 1 | Pending |
+| IOC-04 | Phase 1 | Pending |
+| IOC-05 | Phase 1 | Pending |
 | FEED-01 | Phase 2 | Pending |
 | FEED-02 | Phase 2 | Pending |
 | FEED-03 | Phase 2 | Pending |
 | FEED-04 | Phase 2 | Pending |
-| FEED-05 | Phase 2 | Pending |
 | FEED-06 | Phase 2 | Pending |
-| IOC-01 | Phase 2 | Pending |
-| IOC-02 | Phase 2 | Pending |
-| IOC-03 | Phase 2 | Pending |
-| IOC-04 | Phase 2 | Pending |
-| IOC-05 | Phase 2 | Pending |
 | SRCH-01 | Phase 3 | Pending |
 | SRCH-02 | Phase 3 | Pending |
 | SRCH-03 | Phase 3 | Pending |
@@ -128,17 +122,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DTIL-01 | Phase 3 | Pending |
 | DTIL-02 | Phase 3 | Pending |
 | DTIL-03 | Phase 3 | Pending |
-| DASH-01 | Phase 3 | Pending |
-| DASH-02 | Phase 3 | Pending |
-| DASH-03 | Phase 3 | Pending |
-| GRPH-01 | Phase 4 | Pending |
-| GRPH-02 | Phase 4 | Pending |
-| GRPH-03 | Phase 4 | Pending |
-| WKSP-01 | Phase 5 | Pending |
-| WKSP-02 | Phase 5 | Pending |
-| WKSP-03 | Phase 5 | Pending |
-| WKSP-04 | Phase 5 | Pending |
-| WKSP-05 | Phase 5 | Pending |
+| AUTH-01 | Phase 4 | Pending |
+| AUTH-02 | Phase 4 | Pending |
+| AUTH-03 | Phase 4 | Pending |
+| AUTH-04 | Phase 4 | Pending |
+| AUTH-05 | Phase 4 | Pending |
+| DASH-01 | Phase 4 | Pending |
+| DASH-02 | Phase 4 | Pending |
+| DASH-03 | Phase 4 | Pending |
+| FEED-05 | Phase 4 | Pending |
+| GRPH-01 | Phase 5 | Pending |
+| GRPH-02 | Phase 5 | Pending |
+| GRPH-03 | Phase 5 | Pending |
+| WKSP-01 | Phase 6 | Pending |
+| WKSP-02 | Phase 6 | Pending |
+| WKSP-03 | Phase 6 | Pending |
+| WKSP-04 | Phase 6 | Pending |
+| WKSP-05 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 35 total
@@ -147,4 +147,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-20*
-*Last updated: 2026-03-20 after initial definition*
+*Last updated: 2026-03-20 after roadmap creation — traceability updated to 6-phase structure*
