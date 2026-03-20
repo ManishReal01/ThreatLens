@@ -3,88 +3,120 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { fetchApi } from "@/lib/api.client";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Loader2, ChevronLeft, ChevronRight, Bookmark, Download, FileJson } from "lucide-react";
+import { getSeverity, severityFilterToParams, formatRelativeTime } from "@/lib/utils";
+import { Search, Loader2, ChevronLeft, ChevronRight, Download, FileJson, Filter, X } from "lucide-react";
 import Link from "next/link";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-interface IOCResponse {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  items: any[];
+/* ─── Types ─────────────────────────────────────────────────────────────── */
+interface IOCListItem {
+  id: string;
+  value: string;
+  type: string;
+  severity: number | null;
+  first_seen: string;
+  last_seen: string;
+  source_count: number;
+  is_active: boolean;
+}
+interface PaginatedResponse {
+  items: IOCListItem[];
   total: number;
   page: number;
   pages: number;
 }
 
-const MOCK_DATA = {
-  items: [
-    { id: "ioc-1", value: "185.15.247.140", type: "ipv4", severity: "critical", score: 98, last_seen: new Date().toISOString(), is_watched: true, tags: ["c2-server"] },
-    { id: "ioc-2", value: "malicious-domain.com", type: "domain", severity: "high", score: 85, last_seen: new Date().toISOString() },
-    { id: "ioc-3", value: "http://example.com/payload.exe", type: "url", severity: "high", score: 79, last_seen: new Date().toISOString(), is_watched: true, tags: ["malware"] },
-    { id: "ioc-4", value: "88.214.26.43", type: "ipv4", severity: "medium", score: 65, last_seen: new Date().toISOString() },
-  ],
-  total: 4,
-  page: 1,
-  pages: 1,
+/* ─── Subcomponents ─────────────────────────────────────────────────────── */
+const TYPE_COLORS: Record<string, string> = {
+  ipv4:        "bg-sky-500/10 text-sky-400 border-sky-500/20",
+  domain:      "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  url:         "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  hash_md5:    "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  hash_sha1:   "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  hash_sha256: "bg-amber-500/10 text-amber-400 border-amber-500/20",
 };
 
-function SearchFilters() {
+function TypeBadge({ type }: { type: string }) {
+  const cls = TYPE_COLORS[type] ?? "bg-muted/20 text-muted-foreground border-muted/30";
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border ${cls}`}>
+      {type.replace("hash_", "")}
+    </span>
+  );
+}
+
+function SevBadge({ score }: { score: number | null | undefined }) {
+  const sev = getSeverity(score);
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-semibold border ${sev.cls}`}>
+      <span className={`w-1 h-1 rounded-full ${sev.dotCls}`} />
+      {sev.label}
+    </span>
+  );
+}
+
+/* ─── Main search component ─────────────────────────────────────────────── */
+function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
   const [query, setQuery] = useState(searchParams.get("q") || "");
-  const [type, setType] = useState(searchParams.get("type") || "all");
-  const [severity, setSeverity] = useState(searchParams.get("severity") || "all");
-  
-  const [results, setResults] = useState<IOCResponse>(MOCK_DATA);
+  const [type, setType] = useState(searchParams.get("type") || "");
+  const [severity, setSeverity] = useState(searchParams.get("severity") || "");
+
+  const [results, setResults] = useState<PaginatedResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Apply filters to URL
   const applyFilters = useCallback(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    
+    const params = new URLSearchParams();
     if (query) params.set("q", query);
-    else params.delete("q");
-    
-    if (type && type !== "all") params.set("type", type);
-    else params.delete("type");
-    
-    if (severity && severity !== "all") params.set("severity", severity);
-    else params.delete("severity");
-    
-    params.set("page", "1"); // Reset to page 1 on new filter
-    
+    if (type) params.set("type", type);
+    if (severity) params.set("severity", severity);
+    params.set("page", "1");
     router.push(`${pathname}?${params.toString()}`);
-  }, [query, type, severity, pathname, router, searchParams]);
+  }, [query, type, severity, pathname, router]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      applyFilters();
-    }
+  const clearFilters = () => {
+    setQuery("");
+    setType("");
+    setSeverity("");
+    router.push(pathname);
   };
+
+  const hasFilters = !!(query || type || severity);
 
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
+      setError(null);
       try {
-        const queryParams = searchParams.toString();
-        const res = await fetchApi(`/api/iocs/search?${queryParams}`);
-        if (res && res.items) {
-          setResults(res);
+        // Build query params — severity filter maps to numeric range
+        const params = new URLSearchParams();
+        const q = searchParams.get("q");
+        const t = searchParams.get("type");
+        const sev = searchParams.get("severity");
+        const page = searchParams.get("page") || "1";
+
+        if (q) params.set("q", q);
+        if (t) params.set("type", t);
+        if (sev) {
+          const sevParams = severityFilterToParams(sev);
+          Object.entries(sevParams).forEach(([k, v]) => params.set(k, v));
         }
-      } catch {
-         // Silently fallback to mock data
+        params.set("page", page);
+        params.set("page_size", "25");
+
+        const res = await fetchApi(`/api/iocs?${params.toString()}`);
+        setResults(res);
+      } catch (err) {
+        console.error(err);
+        setError("Failed to fetch results. Ensure the API is running.");
+        setResults(null);
       } finally {
         setLoading(false);
       }
     }
-    
     fetchData();
   }, [searchParams]);
 
@@ -96,195 +128,331 @@ function SearchFilters() {
 
   const currentPage = parseInt(searchParams.get("page") || "1", 10);
 
+  /* ── Export ──────────────────────────────────────────────────────────── */
   const handleExportCSV = () => {
-    const headers = ["Indicator", "Type", "Severity", "Score", "Tags", "Observed Date"];
-    const rows = results.items.map(item => [
-      item.value, 
-      item.type, 
-      item.severity, 
-      item.score,
-      (item.tags || []).join("; "), 
-      new Date(item.last_seen).toLocaleDateString()
+    if (!results) return;
+    const headers = ["Indicator", "Type", "Severity Score", "Severity Label", "Sources", "Last Seen"];
+    const rows = results.items.map((item) => [
+      `"${item.value}"`,
+      item.type,
+      item.severity ?? "",
+      getSeverity(item.severity).label,
+      item.source_count,
+      new Date(item.last_seen).toISOString(),
     ]);
-    const csvContent = [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `threatlens-search-${new Date().toISOString().slice(0,10)}.csv`;
+    link.download = `threatlens-iocs-${new Date().toISOString().slice(0, 10)}.csv`;
     link.click();
   };
 
   const handleExportJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(results.items, null, 2));
+    if (!results) return;
     const link = document.createElement("a");
-    link.href = dataStr;
-    link.download = `threatlens-search-${new Date().toISOString().slice(0,10)}.json`;
+    link.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(results.items, null, 2));
+    link.download = `threatlens-iocs-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
   };
 
+  /* ── Render ──────────────────────────────────────────────────────────── */
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-end">
+    <div className="space-y-4 animate-in fade-in duration-400">
+
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">IOC Search</h1>
-          <p className="text-muted-foreground mt-1">Locate indicators across all feeds.</p>
+          <h1 className="text-2xl font-bold font-heading tracking-tight" style={{ color: "var(--foreground)" }}>
+            IOC Search
+          </h1>
+          <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+            Search across all threat intelligence feeds
+          </p>
         </div>
-        <DropdownMenu>
-          {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
-          {/* @ts-expect-error type missing */}
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <Download className="w-4 h-4 mr-2" /> Export Results
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleExportCSV}>
-               <span className="font-medium flex items-center">Download as CSV</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleExportJSON}>
-               <span className="font-medium flex items-center"><FileJson className="w-4 h-4 mr-2 text-muted-foreground" /> Download as JSON</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportCSV}
+            disabled={!results || results.items.length === 0}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium disabled:opacity-40 transition-all"
+            style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+          >
+            <Download className="w-3 h-3" /> CSV
+          </button>
+          <button
+            onClick={handleExportJSON}
+            disabled={!results || results.items.length === 0}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium disabled:opacity-40 transition-all"
+            style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+          >
+            <FileJson className="w-3 h-3" /> JSON
+          </button>
+        </div>
       </div>
 
-      <Card>
-        <CardContent className="p-4 sm:flex items-center space-y-4 sm:space-y-0 sm:space-x-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
+      {/* Filter bar */}
+      <div
+        className="rounded-lg border p-3"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[180px]">
+            <Search
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
+              style={{ color: "var(--muted-foreground)" }}
+            />
+            <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Search IPs, domains, hashes..." 
-              className="pl-9"
+              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              placeholder="Search IPs, domains, hashes, URLs…"
+              className="w-full h-8 pl-8 pr-3 rounded text-sm bg-transparent border outline-none transition-colors focus:border-primary"
+              style={{
+                background: "var(--input)",
+                borderColor: "var(--border)",
+                color: "var(--foreground)",
+              }}
             />
           </div>
-          
-          <Select value={type} onValueChange={v => setType(v || "all")}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="All Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="ipv4">IPv4</SelectItem>
-              <SelectItem value="domain">Domain</SelectItem>
-              <SelectItem value="url">URL</SelectItem>
-              <SelectItem value="hash">Hash</SelectItem>
-            </SelectContent>
-          </Select>
 
-          <Select value={severity} onValueChange={v => setSeverity(v || "all")}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="All Severities" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Severities</SelectItem>
-              <SelectItem value="critical">Critical</SelectItem>
-              <SelectItem value="high">High</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-            </SelectContent>
-          </Select>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="h-8 px-2 rounded text-xs border outline-none cursor-pointer appearance-none"
+            style={{
+              background: "var(--input)",
+              borderColor: "var(--border)",
+              color: type ? "var(--foreground)" : "var(--muted-foreground)",
+            }}
+          >
+            <option value="">All Types</option>
+            <option value="ipv4">IPv4</option>
+            <option value="domain">Domain</option>
+            <option value="url">URL</option>
+            <option value="hash_md5">Hash MD5</option>
+            <option value="hash_sha256">Hash SHA256</option>
+          </select>
 
-          <Button onClick={applyFilters}>Search</Button>
-        </CardContent>
-      </Card>
+          <select
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value)}
+            className="h-8 px-2 rounded text-xs border outline-none cursor-pointer appearance-none"
+            style={{
+              background: "var(--input)",
+              borderColor: "var(--border)",
+              color: severity ? "var(--foreground)" : "var(--muted-foreground)",
+            }}
+          >
+            <option value="">All Severities</option>
+            <option value="critical">Critical (≥9.0)</option>
+            <option value="high">High (7.0–8.9)</option>
+            <option value="medium">Medium (4.0–6.9)</option>
+            <option value="low">Low (&lt;4.0)</option>
+          </select>
 
-      <Card>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Indicator</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead>Severity</TableHead>
-                <TableHead className="text-right">Observed</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center">
-                    <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
-                  </TableCell>
-                </TableRow>
-              ) : results.items.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
-                    No results found matching your criteria.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                results.items.map((ioc) => (
-                  <TableRow key={ioc.id} className={`cursor-pointer transition-colors ${ioc.is_watched ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/50'}`}>
-                    <TableCell>
-                      <Link href={`/iocs/${ioc.id}`} className="font-mono text-sm font-medium text-primary hover:underline flex items-center w-full h-full">
-                        {ioc.is_watched && <Bookmark className="w-3 h-3 mr-2 text-primary" fill="currentColor" />}
-                        {ioc.value}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="uppercase text-[10px] tracking-wider">{ioc.type}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-primary" style={{ width: `${ioc.score}%` }}></div>
-                        </div>
-                        <span className="text-xs text-muted-foreground">{ioc.score}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={ioc.severity === 'critical' ? 'destructive' : 'secondary'} className="capitalize">
-                        {ioc.severity}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right text-xs text-muted-foreground">
-                      {new Date(ioc.last_seen).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <button
+            onClick={applyFilters}
+            className="h-8 flex items-center gap-1.5 px-3 rounded text-xs font-medium transition-all"
+            style={{
+              background: "rgba(56,189,248,0.12)",
+              border: "1px solid rgba(56,189,248,0.25)",
+              color: "var(--primary)",
+            }}
+          >
+            <Filter className="w-3 h-3" />
+            Search
+          </button>
+
+          {hasFilters && (
+            <button
+              onClick={clearFilters}
+              className="h-8 flex items-center gap-1.5 px-3 rounded text-xs font-medium transition-all"
+              style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+            >
+              <X className="w-3 h-3" />
+              Clear
+            </button>
+          )}
         </div>
-        
-        {!loading && results.pages > 1 && (
-          <div className="p-4 border-t flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              Showing page {results.page} of {results.pages}
+      </div>
+
+      {/* Results table */}
+      <div
+        className="rounded-lg border overflow-hidden"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        {/* Table meta */}
+        <div
+          className="flex items-center justify-between px-4 py-2.5 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <span className="text-[10px] uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
+            {results
+              ? `${results.total.toLocaleString()} result${results.total !== 1 ? "s" : ""}`
+              : loading
+              ? "Searching…"
+              : ""}
+          </span>
+          {results && results.pages > 1 && (
+            <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+              Page {results.page} of {results.pages}
             </span>
-            <div className="flex space-x-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => changePage(currentPage - 1)}
-                disabled={currentPage <= 1}
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" /> Prev
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => changePage(currentPage + 1)}
-                disabled={currentPage >= results.pages}
-              >
-                Next <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </div>
+          )}
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div
+            className="flex items-center gap-2 px-4 py-8 text-xs"
+            style={{ color: "#f87171" }}
+          >
+            {error}
           </div>
         )}
-      </Card>
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center h-32">
+            <Loader2 className="w-5 h-5 animate-spin" style={{ color: "var(--primary)" }} />
+          </div>
+        )}
+
+        {/* Empty */}
+        {!loading && !error && results && results.items.length === 0 && (
+          <div
+            className="flex flex-col items-center justify-center h-32 gap-2 text-xs"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            <Search className="w-8 h-8 opacity-20" />
+            No indicators match your search criteria.
+          </div>
+        )}
+
+        {/* Results */}
+        {!loading && results && results.items.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ borderBottom: `1px solid var(--border)` }}>
+                  {["Indicator", "Type", "Score", "Severity", "Sources", "Last Seen"].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold"
+                      style={{ color: "var(--muted-foreground)" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {results.items.map((ioc, i) => {
+                  const sev = getSeverity(ioc.severity);
+                  return (
+                    <tr
+                      key={ioc.id}
+                      className="group transition-colors cursor-pointer"
+                      style={{
+                        borderBottom: i < results.items.length - 1 ? `1px solid var(--border)` : undefined,
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+                    >
+                      <td className="px-4 py-2.5">
+                        <Link
+                          href={`/iocs/${ioc.id}`}
+                          className="font-mono font-medium hover:underline truncate max-w-[240px] block"
+                          style={{ color: "var(--primary)", fontFamily: "var(--font-mono)" }}
+                        >
+                          {ioc.value}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <TypeBadge type={ioc.type} />
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-12 h-1.5 rounded-full overflow-hidden flex-shrink-0"
+                            style={{ background: "var(--muted)" }}
+                          >
+                            <div
+                              className={`h-full rounded-full ${sev.barCls}`}
+                              style={{ width: `${((ioc.severity ?? 0) / 10) * 100}%` }}
+                            />
+                          </div>
+                          <span className="tabular-nums font-mono" style={{ color: "var(--foreground)" }}>
+                            {(ioc.severity ?? 0).toFixed(1)}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <SevBadge score={ioc.severity} />
+                      </td>
+                      <td
+                        className="px-4 py-2.5 tabular-nums"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
+                        {ioc.source_count}
+                      </td>
+                      <td
+                        className="px-4 py-2.5 font-mono"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
+                        {formatRelativeTime(ioc.last_seen)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && results && results.pages > 1 && (
+          <div
+            className="flex items-center justify-between px-4 py-2.5 border-t"
+            style={{ borderColor: "var(--border)" }}
+          >
+            <button
+              onClick={() => changePage(currentPage - 1)}
+              disabled={currentPage <= 1}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs disabled:opacity-40 transition-all"
+              style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+            >
+              <ChevronLeft className="w-3.5 h-3.5" /> Prev
+            </button>
+            <span className="text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+              {currentPage} / {results.pages}
+            </span>
+            <button
+              onClick={() => changePage(currentPage + 1)}
+              disabled={currentPage >= results.pages}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs disabled:opacity-40 transition-all"
+              style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+            >
+              Next <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 export default function SearchPage() {
   return (
-    <Suspense fallback={<div className="animate-pulse h-96 bg-card rounded-xl"></div>}>
-      <SearchFilters />
+    <Suspense
+      fallback={
+        <div className="space-y-4">
+          <div className="skeleton h-9 w-48" />
+          <div className="skeleton h-14" />
+          <div className="skeleton h-72" />
+        </div>
+      }
+    >
+      <SearchContent />
     </Suspense>
   );
 }
