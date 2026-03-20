@@ -38,10 +38,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — tighten allow_origins to your frontend URL in production
+# CORS — set ALLOWED_ORIGINS in .env (comma-separated) for production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.allowed_origins.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

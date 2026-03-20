@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     # JWT secret from Supabase dashboard → Settings → API → JWT Secret
     supabase_jwt_secret: str = ""
 
+    # CORS — comma-separated list of allowed origins
+    allowed_origins: str = "http://localhost:3000"
+
     # Feed API keys (empty string = feed disabled; worker skips if not configured)
     abuseipdb_api_key: str = ""
     otx_api_key: str = ""
