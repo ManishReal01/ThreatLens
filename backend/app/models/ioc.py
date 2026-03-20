@@ -1,12 +1,19 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+
+
+def _utcnow():
+    """Python-side UTC now — used as default to keep SQLite tests working.
+    PostgreSQL uses server_default=NOW() which takes precedence in production.
+    """
+    return datetime.now(timezone.utc)
 
 
 class IOCModel(Base):
@@ -15,6 +22,10 @@ class IOCModel(Base):
     The (value, type) unique constraint enforces dedup at the DB layer.
     IOC type uses distinct values per hash algorithm (hash_md5, hash_sha1,
     hash_sha256) so UNIQUE(value, type) correctly distinguishes them.
+
+    NOTE: ORM columns use sa.JSON (cross-dialect). The Alembic migration
+    uses postgresql.JSONB for the actual PostgreSQL DDL — that's the source
+    of truth for production schema.
     """
 
     __tablename__ = "iocs"
@@ -36,22 +47,24 @@ class IOCModel(Base):
     )
     # Increment score_version when formula weights change to enable targeted recalc
     score_version: sa.orm.Mapped[int] = sa.orm.mapped_column(
-        sa.Integer, nullable=False, server_default="1"
+        sa.Integer, nullable=False, default=1, server_default="1"
     )
     score_explanation: sa.orm.Mapped[Optional[dict]] = sa.orm.mapped_column(
-        JSONB, nullable=True
+        sa.JSON, nullable=True
     )
     first_seen: sa.orm.Mapped[sa.DateTime] = sa.orm.mapped_column(
-        sa.TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()")
+        sa.TIMESTAMP(timezone=True), nullable=False,
+        default=_utcnow, server_default=text("NOW()")
     )
     last_seen: sa.orm.Mapped[sa.DateTime] = sa.orm.mapped_column(
-        sa.TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()")
+        sa.TIMESTAMP(timezone=True), nullable=False,
+        default=_utcnow, server_default=text("NOW()")
     )
     source_count: sa.orm.Mapped[int] = sa.orm.mapped_column(
-        sa.Integer, nullable=False, server_default="1"
+        sa.Integer, nullable=False, default=1, server_default="1"
     )
     is_active: sa.orm.Mapped[bool] = sa.orm.mapped_column(
-        sa.Boolean, nullable=False, server_default="true"
+        sa.Boolean, nullable=False, default=True, server_default="true"
     )
     retired_at: sa.orm.Mapped[Optional[sa.DateTime]] = sa.orm.mapped_column(
         sa.TIMESTAMP(timezone=True), nullable=True
@@ -59,7 +72,7 @@ class IOCModel(Base):
     # Python attribute name is metadata_ to avoid conflict with SQLAlchemy's
     # reserved `metadata` attribute; maps to column name "metadata" in DB
     metadata_: sa.orm.Mapped[Optional[dict]] = sa.orm.mapped_column(
-        "metadata", JSONB, nullable=True
+        "metadata", sa.JSON, nullable=True
     )
 
     # Relationships

@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 import sqlalchemy as sa
@@ -7,12 +8,12 @@ from sqlalchemy import text
 from app.db.base import Base
 
 
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+
 class FeedRunModel(Base):
     """Feed run execution log.
-
-    Each row corresponds to one scheduled or manual feed poll attempt.
-    Tracks success/failure, IOC counts, and consecutive_failure_count
-    for circuit-breaker logic in Phase 2.
 
     Status values: 'running' | 'success' | 'error'
     """
@@ -27,14 +28,15 @@ class FeedRunModel(Base):
     )
     feed_name: sa.orm.Mapped[str] = sa.orm.mapped_column(sa.Text, nullable=False)
     started_at: sa.orm.Mapped[sa.DateTime] = sa.orm.mapped_column(
-        sa.TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()")
+        sa.TIMESTAMP(timezone=True), nullable=False,
+        default=_utcnow, server_default=text("NOW()")
     )
     completed_at: sa.orm.Mapped[Optional[sa.DateTime]] = sa.orm.mapped_column(
         sa.TIMESTAMP(timezone=True), nullable=True
     )
     status: sa.orm.Mapped[str] = sa.orm.mapped_column(
-        sa.Text, nullable=False, server_default="running"
-    )  # 'running' | 'success' | 'error'
+        sa.Text, nullable=False, default="running", server_default="running"
+    )
     iocs_fetched: sa.orm.Mapped[int] = sa.orm.mapped_column(
         sa.Integer, default=0
     )
@@ -49,8 +51,7 @@ class FeedRunModel(Base):
     )
     last_successful_sync: sa.orm.Mapped[Optional[sa.DateTime]] = sa.orm.mapped_column(
         sa.TIMESTAMP(timezone=True), nullable=True
-    )  # separate from completed_at; only set on success
-    # Circuit-breaker counter: reset to 0 on success, increment on failure
+    )
     consecutive_failure_count: sa.orm.Mapped[int] = sa.orm.mapped_column(
         sa.Integer, default=0
     )

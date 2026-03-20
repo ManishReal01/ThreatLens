@@ -1,10 +1,15 @@
 import uuid
+from datetime import datetime, timezone
 
 import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint, text
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 
 class TagModel(Base):
@@ -35,10 +40,10 @@ class TagModel(Base):
     )
     tag: sa.orm.Mapped[str] = sa.orm.mapped_column(sa.Text, nullable=False)
     created_at: sa.orm.Mapped[sa.DateTime] = sa.orm.mapped_column(
-        sa.TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()")
+        sa.TIMESTAMP(timezone=True), nullable=False,
+        default=_utcnow, server_default=text("NOW()")
     )
 
-    # Relationship
     ioc: sa.orm.Mapped["IOCModel"] = relationship(  # noqa: F821
         "IOCModel", back_populates="tags"
     )
@@ -68,13 +73,14 @@ class NoteModel(Base):
     )
     body: sa.orm.Mapped[str] = sa.orm.mapped_column(sa.Text, nullable=False)
     created_at: sa.orm.Mapped[sa.DateTime] = sa.orm.mapped_column(
-        sa.TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()")
+        sa.TIMESTAMP(timezone=True), nullable=False,
+        default=_utcnow, server_default=text("NOW()")
     )
     updated_at: sa.orm.Mapped[sa.DateTime] = sa.orm.mapped_column(
-        sa.TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()")
+        sa.TIMESTAMP(timezone=True), nullable=False,
+        default=_utcnow, server_default=text("NOW()")
     )
 
-    # Relationship
     ioc: sa.orm.Mapped["IOCModel"] = relationship(  # noqa: F821
         "IOCModel", back_populates="notes"
     )
@@ -107,10 +113,10 @@ class WatchlistModel(Base):
         nullable=False,
     )
     added_at: sa.orm.Mapped[sa.DateTime] = sa.orm.mapped_column(
-        sa.TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()")
+        sa.TIMESTAMP(timezone=True), nullable=False,
+        default=_utcnow, server_default=text("NOW()")
     )
 
-    # Relationship
     ioc: sa.orm.Mapped["IOCModel"] = relationship(  # noqa: F821
         "IOCModel", back_populates="watchlists"
     )

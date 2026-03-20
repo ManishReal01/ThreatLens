@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 import sqlalchemy as sa
@@ -7,13 +8,15 @@ from sqlalchemy import UniqueConstraint, text
 from app.db.base import Base
 
 
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+
 class IOCRelationshipModel(Base):
     """IOC relationships adjacency table.
 
     Both FKs (source_ioc, target_ioc) have B-tree indexes for bidirectional
     graph traversal. Recursive CTE queries look up both directions.
-
-    Relationship types: 'observed_with', 'resolves_to', 'serves', 'analyst_linked'
     """
 
     __tablename__ = "ioc_relationships"
@@ -39,15 +42,14 @@ class IOCRelationshipModel(Base):
         sa.ForeignKey("iocs.id", ondelete="CASCADE"),
         nullable=False,
     )
-    relationship: sa.orm.Mapped[str] = sa.orm.mapped_column(
-        sa.Text, nullable=False
-    )  # 'observed_with' | 'resolves_to' | 'serves' | 'analyst_linked'
+    relationship: sa.orm.Mapped[str] = sa.orm.mapped_column(sa.Text, nullable=False)
     confidence: sa.orm.Mapped[Optional[float]] = sa.orm.mapped_column(
         sa.Numeric(4, 2), nullable=True
     )
     inferred_by: sa.orm.Mapped[Optional[str]] = sa.orm.mapped_column(
         sa.Text, nullable=True
-    )  # 'abuseipdb' | 'urlhaus' | 'otx' | 'analyst'
+    )
     created_at: sa.orm.Mapped[sa.DateTime] = sa.orm.mapped_column(
-        sa.TIMESTAMP(timezone=True), nullable=False, server_default=text("NOW()")
+        sa.TIMESTAMP(timezone=True), nullable=False,
+        default=_utcnow, server_default=text("NOW()")
     )
