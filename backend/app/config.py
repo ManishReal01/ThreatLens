@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # OTX: max pulses to fetch per page (pagination stops at "next": null)
     otx_pulse_limit: int = 50
 
+    # OTX: max pages to fetch on the very first run (no prior sync timestamp).
+    # Subsequent delta runs are uncapped — they only pull recently-modified pulses.
+    otx_max_pages_first_run: int = 10
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

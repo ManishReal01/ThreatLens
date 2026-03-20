@@ -46,6 +46,7 @@ Co-occurrence: all IOC IDs within a single pulse are linked with
 'observed_with' edges at confidence 0.7.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -98,11 +99,24 @@ class OTXWorker(BaseFeedWorker):
             modified_since.isoformat() if modified_since else "beginning (first run)",
         )
 
+        # On the very first run there can be thousands of pages; cap it so the
+        # session pooler is not overwhelmed.  Subsequent delta runs are small
+        # and are allowed to run to completion (max_pages=None).
+        is_first_run = modified_since is None
+        max_pages = self.settings.otx_max_pages_first_run if is_first_run else None
+
         fetched = new = updated = 0
         next_url: Optional[str] = _SUBSCRIBED_URL
         first_page = True
+        page_num = 0
 
         while next_url:
+            if max_pages is not None and page_num >= max_pages:
+                logger.info(
+                    "OTX first-run page cap (%d) reached — stopping early", max_pages
+                )
+                break
+
             params: Optional[dict[str, Any]] = None
             if first_page:
                 params = {"limit": self.settings.otx_pulse_limit}
@@ -120,7 +134,10 @@ class OTXWorker(BaseFeedWorker):
             body = response.json()
             pulses: list[dict[str, Any]] = body.get("results", [])
             logger.info(
-                "OTX page: %d pulses (total count=%s)", len(pulses), body.get("count")
+                "OTX page %d: %d pulses (total count=%s)",
+                page_num + 1,
+                len(pulses),
+                body.get("count"),
             )
 
             for pulse in pulses:
@@ -132,7 +149,17 @@ class OTXWorker(BaseFeedWorker):
                 new += pulse_new
                 updated += pulse_updated
 
+            # Commit after each page to avoid long-lived transactions that
+            # can trigger statement timeouts through the Supabase session pooler.
+            await session.commit()
+            logger.debug("OTX page %d committed (%d new, %d updated so far)", page_num + 1, new, updated)
+
             next_url = body.get("next")  # None stops the loop
+            page_num += 1
+
+            # Brief pause between pages to avoid overwhelming the pooler.
+            if next_url:
+                await asyncio.sleep(1)
 
         return fetched, new, updated
 
