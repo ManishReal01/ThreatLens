@@ -1,0 +1,52 @@
+# Node.js
+node_modules/
+.pnp
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun.lockb
+.npm
+
+# Next.js
+.next/
+out/
+build/
+.swc/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database
+test.db
+*.sqlite3
+*.db
+
+# macOS
+.DS_Store
+
+# IDE and Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temporary directories
+.tmp/
+tmp/
