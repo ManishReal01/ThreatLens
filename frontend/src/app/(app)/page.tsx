@@ -1,72 +1,121 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowRight, Activity, RefreshCw, ServerCrash, Bookmark } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from "recharts";
 import { fetchApi } from "@/lib/api.client";
 import { createClient } from "@/lib/supabase/client";
+import { getSeverity, formatRelativeTime, formatDateTime } from "@/lib/utils";
+import {
+  Activity, ServerCrash, RefreshCw, Zap, Shield, Database,
+  AlertTriangle, ArrowUpRight, Clock,
+} from "lucide-react";
+import Link from "next/link";
 
-// Mock Data Fallbacks
-const MOCK_FEEDS = [
-  { id: 1, name: "AbuseIPDB", last_run: new Date().toISOString(), status: "success", iocs_added: 1245 },
-  { id: 2, name: "URLhaus", last_run: new Date(Date.now() - 3600000).toISOString(), status: "success", iocs_added: 834 },
-  { id: 3, name: "AlienVault OTX", last_run: new Date(Date.now() - 7200000).toISOString(), status: "error", iocs_added: 0 },
-];
+/* ─── Types ─────────────────────────────────────────────────────────────── */
+interface FeedHealth {
+  feed_name: string;
+  last_run_at: string | null;
+  last_run_status: string | null;
+  last_iocs_fetched: number | null;
+  last_iocs_new: number | null;
+  last_error_msg: string | null;
+}
 
-const MOCK_IOCS = [
-  { id: "ioc-1", value: "185.15.247.140", type: "ipv4", severity: "critical", score: 98, last_seen: new Date().toISOString(), is_watched: true },
-  { id: "ioc-2", value: "malicious-domain.com", type: "domain", severity: "high", score: 85, last_seen: new Date().toISOString() },
-  { id: "ioc-3", value: "http://example.com/payload.exe", type: "url", severity: "high", score: 79, last_seen: new Date().toISOString(), is_watched: true },
-  { id: "ioc-4", value: "88.214.26.43", type: "ipv4", severity: "medium", score: 65, last_seen: new Date().toISOString() },
-  { id: "ioc-5", value: "e3b0c442...bb1", type: "hash", severity: "low", score: 30, last_seen: new Date().toISOString() },
-];
+interface IOCListItem {
+  id: string;
+  value: string;
+  type: string;
+  severity: number | null;
+  first_seen: string;
+  last_seen: string;
+  source_count: number;
+  is_active: boolean;
+}
 
-const MOCK_TYPE_DATA = [
-  { name: "IPv4", count: 4500 },
-  { name: "Domain", count: 2100 },
-  { name: "URL", count: 1800 },
-  { name: "Hash", count: 850 },
-];
+interface Stats {
+  total: number;
+  critical: number;
+  high: number;
+  active: number;
+}
 
-const MOCK_SEVERITY_DATA = [
-  { name: "Critical", count: 120, color: "var(--destructive)" },
-  { name: "High", count: 850, color: "var(--chart-1)" },
-  { name: "Medium", count: 3200, color: "var(--chart-2)" },
-  { name: "Low", count: 4900, color: "var(--chart-3)" },
-];
+/* ─── Skeleton ───────────────────────────────────────────────────────────── */
+function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`skeleton ${className}`} />;
+}
 
+/* ─── Feed name display map ─────────────────────────────────────────────── */
+const FEED_DISPLAY: Record<string, { label: string; short: string }> = {
+  abuseipdb: { label: "AbuseIPDB", short: "AIPDB" },
+  urlhaus: { label: "URLhaus", short: "UHAUS" },
+  otx: { label: "AlienVault OTX", short: "OTX" },
+};
+
+/* ─── IOC type badge ─────────────────────────────────────────────────────── */
+const TYPE_COLORS: Record<string, string> = {
+  ipv4:        "bg-sky-500/10 text-sky-400 border-sky-500/20",
+  domain:      "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  url:         "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  hash_md5:    "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  hash_sha1:   "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  hash_sha256: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+};
+function TypeBadge({ type }: { type: string }) {
+  const cls = TYPE_COLORS[type] ?? "bg-muted/20 text-muted-foreground border-muted/30";
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border ${cls}`}>
+      {type.replace("hash_", "")}
+    </span>
+  );
+}
+
+/* ─── Severity badge ────────────────────────────────────────────────────── */
+function SevBadge({ score }: { score: number | null | undefined }) {
+  const sev = getSeverity(score);
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-semibold border ${sev.cls}`}>
+      <span className={`w-1 h-1 rounded-full ${sev.dotCls}`} />
+      {sev.label}
+    </span>
+  );
+}
+
+/* ─── Main component ────────────────────────────────────────────────────── */
 export default function DashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  
-  // Data states
-  const [feeds, setFeeds] = useState(MOCK_FEEDS);
-  const [iocs, setIocs] = useState(MOCK_IOCS);
-  
+  const [loading, setLoading] = useState(true);
+  const [feeds, setFeeds] = useState<FeedHealth[]>([]);
+  const [recentIOCs, setRecentIOCs] = useState<IOCListItem[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     async function init() {
-      // Check admin status mock/actual
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      // Example: simple check if admin based on email
-      if (user?.email === "admin@threatlens.com") {
-        setIsAdmin(true);
-      }
-      
+      if (user?.app_metadata?.role === "admin") setIsAdmin(true);
+
       try {
-        // Attempt to fetch real data
-        const summary = await fetchApi("/api/dashboard/summary");
-        if (summary) {
-          setFeeds(summary.feeds || MOCK_FEEDS);
-          setIocs(summary.recent_iocs || MOCK_IOCS);
-        }
-      } catch (error) {
-        console.warn("Backend unavailable, using mock data.", error);
+        const [feedRes, recentRes, totalRes, critRes] = await Promise.all([
+          fetchApi("/api/feeds/health"),
+          fetchApi("/api/iocs?page_size=8&severity_min=7"),
+          fetchApi("/api/iocs?page_size=1"),
+          fetchApi("/api/iocs?page_size=1&severity_min=9"),
+        ]);
+
+        setFeeds(feedRes?.feeds ?? []);
+        setRecentIOCs(recentRes?.items ?? []);
+
+        const highRes = await fetchApi("/api/iocs?page_size=1&severity_min=7&severity_max=8.99");
+        setStats({
+          total: totalRes?.total ?? 0,
+          critical: critRes?.total ?? 0,
+          high: highRes?.total ?? 0,
+          active: recentRes?.total ?? 0,
+        });
+      } catch (err) {
+        console.error(err);
+        setError("Could not reach the backend. Ensure the API is running at http://127.0.0.1:8000");
       } finally {
         setLoading(false);
       }
@@ -74,159 +123,300 @@ export default function DashboardPage() {
     init();
   }, []);
 
-  const handleSync = async () => {
+  const handleSync = async (feedName: string) => {
     setSyncing(true);
     try {
-      await fetchApi("/api/feeds/sync", { method: "POST" });
-    } catch {
-      // Ignore error for visual feedback in dev
-    }
+      await fetchApi(`/api/feeds/${feedName}/trigger`, { method: "POST" });
+    } catch { /* ignore */ }
     setTimeout(() => setSyncing(false), 2000);
   };
 
-  const formatShortDate = (iso: string) => {
-    const d = new Date(iso);
-    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-  };
+  /* ── Error state ─────────────────────────────────────────────────────── */
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <div
+          className="flex items-center gap-3 px-5 py-4 rounded-lg border text-sm"
+          style={{ background: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)", color: "#f87171" }}
+        >
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {error}
+        </div>
+      </div>
+    );
+  }
 
+  /* ── Loading skeleton ────────────────────────────────────────────────── */
   if (loading) {
-    return <div className="animate-pulse space-y-6">
-      <div className="h-48 bg-card rounded-xl"></div>
-      <div className="h-96 bg-card rounded-xl"></div>
-    </div>;
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-7 w-48" />
+          <Skeleton className="h-8 w-28" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-28" />)}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
+        </div>
+        <Skeleton className="h-72" />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      
-      <div className="flex justify-between items-center">
+    <div className="space-y-5 animate-in fade-in duration-400">
+
+      {/* ── Page header ───────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">System Overview</h1>
-          <p className="text-muted-foreground mt-1">Real-time telemetry and ingest pipeline status.</p>
+          <h1 className="text-2xl font-bold font-heading tracking-tight" style={{ color: "var(--foreground)" }}>
+            System Overview
+          </h1>
+          <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+            Real-time ingest pipeline &amp; threat telemetry
+          </p>
         </div>
         {isAdmin && (
-          <Button onClick={handleSync} disabled={syncing}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+          <button
+            onClick={() => handleSync("otx")}
+            disabled={syncing}
+            className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-all disabled:opacity-50"
+            style={{
+              background: "rgba(56,189,248,0.10)",
+              border: "1px solid rgba(56,189,248,0.25)",
+              color: "var(--primary)",
+            }}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
             Trigger Sync
-          </Button>
+          </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {feeds.map(feed => (
-          <Card key={feed.id} className={`${feed.status === 'error' ? 'border-destructive/50 bg-destructive/5' : ''}`}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">{feed.name}</CardTitle>
-              {feed.status === 'success' ? (
-                <Activity className="w-4 h-4 text-green-500" />
-              ) : (
-                <ServerCrash className="w-4 h-4 text-destructive" />
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {feed.status === 'success' ? `+${feed.iocs_added}` : 'Failed'}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Last run: {formatShortDate(feed.last_run)}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Threat Types Distribution</CardTitle>
-            <CardDescription>Breakdown by IOC category</CardDescription>
-          </CardHeader>
-          <CardContent className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={MOCK_TYPE_DATA} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip cursor={{ fill: 'hsl(var(--muted))' }} contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', border: '1px solid hsl(var(--border))' }} />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Severity Breakdown</CardTitle>
-            <CardDescription>Current database index by threat lever</CardDescription>
-          </CardHeader>
-          <CardContent className="h-80 flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={MOCK_SEVERITY_DATA} innerRadius={80} outerRadius={110} paddingAngle={2} dataKey="count">
-                  {MOCK_SEVERITY_DATA.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderRadius: '8px', border: '1px solid hsl(var(--border))' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Recent High-Severity IOCs</CardTitle>
-            <CardDescription>Critical threats ingested in the last 48 hours</CardDescription>
+      {/* ── Feed health cards ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {feeds.length === 0 ? (
+          <div
+            className="col-span-3 flex items-center justify-center h-24 rounded-lg border text-xs"
+            style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+          >
+            No feed data available.
           </div>
-          <Button variant="ghost" size="sm" className="hidden sm:flex">
-            View All <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Indicator</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Score</TableHead>
-                <TableHead>Severity</TableHead>
-                <TableHead className="text-right">Observed</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {iocs.map((ioc) => (
-                <TableRow key={ioc.id} className={`cursor-pointer transition-colors ${ioc.is_watched ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/50'}`} onClick={() => window.location.href = `/iocs/${ioc.id}`}>
-                  <TableCell className="font-mono text-sm font-medium flex items-center h-full">
-                    {ioc.is_watched && <Bookmark className="w-3 h-3 mr-2 text-primary" fill="currentColor" />}
-                    {ioc.value}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="uppercase text-[10px] tracking-wider">{ioc.type}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-primary" style={{ width: `${ioc.score}%` }}></div>
-                      </div>
-                      <span className="text-xs text-muted-foreground">{ioc.score}</span>
+        ) : (
+          feeds.map((feed) => {
+            const ok = feed.last_run_status === "success";
+            const display = FEED_DISPLAY[feed.feed_name] ?? { label: feed.feed_name, short: feed.feed_name.toUpperCase() };
+            return (
+              <div
+                key={feed.feed_name}
+                className="rounded-lg border p-4 space-y-3 relative overflow-hidden"
+                style={{
+                  background: ok ? "var(--card)" : "rgba(239,68,68,0.04)",
+                  borderColor: ok ? "var(--border)" : "rgba(239,68,68,0.25)",
+                }}
+              >
+                {/* subtle grid bg */}
+                <div className="absolute inset-0 bg-grid-ops opacity-30 pointer-events-none" />
+
+                <div className="relative flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ${ok ? "bg-[#22c55e] status-pulse" : "bg-[#ef4444]"}`}
+                    />
+                    <span className="text-xs font-semibold font-heading uppercase tracking-wider" style={{ color: "var(--foreground)" }}>
+                      {display.label}
+                    </span>
+                  </div>
+                  {ok ? (
+                    <Activity className="w-3.5 h-3.5" style={{ color: "#4ade80" }} />
+                  ) : (
+                    <ServerCrash className="w-3.5 h-3.5" style={{ color: "#f87171" }} />
+                  )}
+                </div>
+
+                <div className="relative">
+                  <div
+                    className="text-2xl font-bold font-heading tabular-nums"
+                    style={{ color: ok ? "var(--foreground)" : "#f87171" }}
+                  >
+                    {ok ? `+${(feed.last_iocs_new ?? 0).toLocaleString()}` : "Error"}
+                  </div>
+                  <div className="text-[10px] mt-0.5 space-y-0.5" style={{ color: "var(--muted-foreground)" }}>
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-2.5 h-2.5" />
+                      {formatRelativeTime(feed.last_run_at)}
+                      {feed.last_iocs_fetched != null && ok && (
+                        <span className="ml-1">· {feed.last_iocs_fetched.toLocaleString()} fetched</span>
+                      )}
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={ioc.severity === 'critical' ? 'destructive' : 'secondary'} className="capitalize">
-                      {ioc.severity}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right text-xs text-muted-foreground">
-                    {formatShortDate(ioc.last_seen)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    {feed.last_error_msg && (
+                      <div className="truncate text-[#f87171]" title={feed.last_error_msg}>
+                        {feed.last_error_msg}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* ── Stats strip ───────────────────────────────────────────────── */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Total IOCs",  value: stats.total,    icon: Database,    color: "var(--primary)",  bg: "rgba(56,189,248,0.08)"   },
+            { label: "Critical",    value: stats.critical, icon: AlertTriangle, color: "#f87171",      bg: "rgba(239,68,68,0.08)"    },
+            { label: "High",        value: stats.high,     icon: Zap,         color: "#fb923c",        bg: "rgba(249,115,22,0.08)"   },
+            { label: "In Scope",    value: stats.active,   icon: Shield,      color: "#4ade80",        bg: "rgba(34,197,94,0.08)"    },
+          ].map(({ label, value, icon: Icon, color, bg }) => (
+            <div
+              key={label}
+              className="rounded-lg border p-3 flex items-center gap-3"
+              style={{ background: bg, borderColor: `${color}30` }}
+            >
+              <div
+                className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
+                style={{ background: `${color}15`, border: `1px solid ${color}30` }}
+              >
+                <Icon className="w-4 h-4" style={{ color }} />
+              </div>
+              <div>
+                <div className="text-xl font-bold font-heading tabular-nums leading-none" style={{ color: "var(--foreground)" }}>
+                  {value.toLocaleString()}
+                </div>
+                <div className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+                  {label}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Recent high-severity IOCs table ───────────────────────────── */}
+      <div
+        className="rounded-lg border overflow-hidden"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div>
+            <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+              Recent High-Severity Indicators
+            </h2>
+            <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+              Severity ≥ 7.0 · sorted by score
+            </p>
+          </div>
+          <Link
+            href="/search?severity_min=7"
+            className="flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-1 rounded transition-colors"
+            style={{ color: "var(--primary)", border: "1px solid rgba(56,189,248,0.2)" }}
+          >
+            View All <ArrowUpRight className="w-3 h-3" />
+          </Link>
+        </div>
+
+        {recentIOCs.length === 0 ? (
+          <div
+            className="flex flex-col items-center justify-center h-36 gap-2 text-xs"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            <Shield className="w-8 h-8 opacity-20" />
+            No high-severity IOCs found.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ borderBottom: `1px solid var(--border)` }}>
+                  {["Indicator", "Type", "Score", "Severity", "Sources", "Last Seen"].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold"
+                      style={{ color: "var(--muted-foreground)" }}
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {recentIOCs.map((ioc, i) => {
+                  const sev = getSeverity(ioc.severity);
+                  return (
+                    <tr
+                      key={ioc.id}
+                      className="group cursor-pointer transition-colors"
+                      style={{
+                        borderBottom: i < recentIOCs.length - 1 ? `1px solid var(--border)` : undefined,
+                      }}
+                      onClick={() => (window.location.href = `/iocs/${ioc.id}`)}
+                    >
+                      {/* Indicator */}
+                      <td className="px-4 py-2.5">
+                        <span
+                          className="font-mono text-xs font-medium group-hover:underline truncate max-w-[240px] block"
+                          style={{ color: "var(--primary)", fontFamily: "var(--font-mono)" }}
+                        >
+                          {ioc.value}
+                        </span>
+                      </td>
+
+                      {/* Type */}
+                      <td className="px-4 py-2.5">
+                        <TypeBadge type={ioc.type} />
+                      </td>
+
+                      {/* Score bar */}
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-14 h-1.5 rounded-full overflow-hidden flex-shrink-0"
+                            style={{ background: "var(--muted)" }}
+                          >
+                            <div
+                              className={`h-full rounded-full ${sev.barCls}`}
+                              style={{ width: `${((ioc.severity ?? 0) / 10) * 100}%` }}
+                            />
+                          </div>
+                          <span
+                            className="tabular-nums font-mono text-[11px]"
+                            style={{ color: "var(--foreground)" }}
+                          >
+                            {(ioc.severity ?? 0).toFixed(1)}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Severity */}
+                      <td className="px-4 py-2.5">
+                        <SevBadge score={ioc.severity} />
+                      </td>
+
+                      {/* Sources */}
+                      <td className="px-4 py-2.5 tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+                        {ioc.source_count}
+                      </td>
+
+                      {/* Last seen */}
+                      <td className="px-4 py-2.5 font-mono" style={{ color: "var(--muted-foreground)" }}>
+                        {formatDateTime(ioc.last_seen)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
