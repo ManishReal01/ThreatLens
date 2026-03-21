@@ -7,10 +7,15 @@ cross-analyst data leakage (IDOR) is impossible at the query layer.
 
 from __future__ import annotations
 
+import logging
 import math
 import uuid
 from datetime import date, datetime, timezone
 from typing import Annotated, Optional
+
+import httpx
+
+logger = logging.getLogger(__name__)
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser
 from app.api.schemas import (
+    GeoIPPoint,
     GraphEdge,
     GraphNode,
     GraphResponse,
@@ -27,6 +33,8 @@ from app.api.schemas import (
     IOCSourceResponse,
     NoteResponse,
     PaginatedIOCResponse,
+    StatsTrend,
+    StatsTrendsResponse,
     StatsResponse,
     TagResponse,
 )
@@ -89,6 +97,99 @@ async def get_stats(
         iocs_by_type=iocs_by_type,
         iocs_by_severity=iocs_by_severity,
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/stats/geoip — geolocate top-100 IP IOCs (cached in DB)
+# ---------------------------------------------------------------------------
+
+
+@stats_router.get("/geoip", response_model=list[GeoIPPoint])
+async def get_geoip_data(
+    current_user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[GeoIPPoint]:
+    """Return geolocated coordinates for the top-100 highest-severity IPv4 IOCs.
+
+    Coordinates are cached in the ``latitude``/``longitude`` columns on the
+    iocs table so ip-api.com is only called once per unique IP address.
+    """
+    # Fetch top 100 IP IOCs ordered by severity
+    result = await session.execute(
+        select(IOCModel)
+        .where(IOCModel.type == "ipv4")
+        .order_by(IOCModel.severity.desc().nullslast())
+        .limit(100)
+    )
+    iocs = result.scalars().all()
+
+    # Geolocate any that don't yet have cached coordinates
+    uncached = [ioc for ioc in iocs if ioc.latitude is None or ioc.longitude is None]
+    if uncached:
+        try:
+            payload = [{"query": ioc.value} for ioc in uncached]
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post("http://ip-api.com/batch", json=payload)
+            if resp.status_code == 200:
+                for ioc, geo in zip(uncached, resp.json()):
+                    if geo.get("status") == "success":
+                        ioc.latitude = geo["lat"]
+                        ioc.longitude = geo["lon"]
+                await session.commit()
+        except Exception as exc:
+            logger.warning("GeoIP lookup failed: %s", exc)
+
+    # Build response — only include IOCs that have valid coordinates
+    points: list[GeoIPPoint] = []
+    for ioc in iocs:
+        if ioc.latitude is None or ioc.longitude is None:
+            continue
+        # Pull first feed source name for tooltip
+        src_result = await session.execute(
+            select(IOCSourceModel.feed_name)
+            .where(IOCSourceModel.ioc_id == ioc.id)
+            .limit(1)
+        )
+        feed_name = src_result.scalar_one_or_none() or "unknown"
+        points.append(
+            GeoIPPoint(
+                value=ioc.value,
+                latitude=ioc.latitude,
+                longitude=ioc.longitude,
+                severity=float(ioc.severity) if ioc.severity is not None else None,
+                feed_source=feed_name,
+            )
+        )
+    return points
+
+
+# ---------------------------------------------------------------------------
+# GET /api/stats/trends — daily IOC counts for the last 7 days
+# ---------------------------------------------------------------------------
+
+
+@stats_router.get("/trends", response_model=StatsTrendsResponse)
+async def get_stats_trends(
+    current_user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> StatsTrendsResponse:
+    """Return IOC ingest counts grouped by day for the last 7 days."""
+    rows = await session.execute(
+        text(
+            """
+            SELECT DATE(first_seen AT TIME ZONE 'UTC') AS day, COUNT(*) AS cnt
+            FROM iocs
+            WHERE first_seen > NOW() - INTERVAL '7 days'
+            GROUP BY day
+            ORDER BY day
+            """
+        )
+    )
+    trends = [
+        StatsTrend(date=str(row[0]), count=int(row[1]))
+        for row in rows
+    ]
+    return StatsTrendsResponse(trends=trends)
 
 
 # ---------------------------------------------------------------------------

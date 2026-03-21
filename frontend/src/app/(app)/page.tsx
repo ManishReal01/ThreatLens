@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { fetchApi } from "@/lib/api.client";
 import { getSeverity, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import {
   Activity, ServerCrash, RefreshCw, Zap, Shield, Database,
-  AlertTriangle, ArrowUpRight, Clock,
+  AlertTriangle, ArrowUpRight, Clock, MapPin,
 } from "lucide-react";
 import Link from "next/link";
+
+const GeoMap = dynamic(() => import("@/components/GeoMap"), { ssr: false });
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface FeedHealth {
@@ -35,6 +38,14 @@ interface Stats {
   total_iocs: number;
   iocs_by_type: Record<string, number>;
   iocs_by_severity: Record<string, number>;
+}
+
+interface GeoIPPoint {
+  value: string;
+  latitude: number;
+  longitude: number;
+  severity: number | null;
+  feed_source: string;
 }
 
 /* ─── Skeleton ───────────────────────────────────────────────────────────── */
@@ -85,20 +96,23 @@ export default function DashboardPage() {
   const [feeds, setFeeds] = useState<FeedHealth[]>([]);
   const [recentIOCs, setRecentIOCs] = useState<IOCListItem[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [geoPoints, setGeoPoints] = useState<GeoIPPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function init() {
       try {
-        const [feedRes, recentRes, statsRes] = await Promise.all([
+        const [feedRes, recentRes, statsRes, geoRes] = await Promise.all([
           fetchApi("/api/feeds/health"),
           fetchApi("/api/iocs?page_size=8&severity_min=7"),
           fetchApi("/api/stats"),
+          fetchApi("/api/stats/geoip").catch(() => []),
         ]);
 
         setFeeds(feedRes?.feeds ?? []);
         setRecentIOCs(recentRes?.items ?? []);
         setStats(statsRes ?? null);
+        setGeoPoints(Array.isArray(geoRes) ? geoRes : []);
       } catch (err) {
         console.error(err);
         setError("Could not reach the backend. Ensure the API is running at http://127.0.0.1:8000");
@@ -280,6 +294,30 @@ export default function DashboardPage() {
           ))}
         </div>
       )}
+
+      {/* ── GeoIP threat map ──────────────────────────────────────────── */}
+      <div
+        className="rounded-lg border border-slate-700/50 overflow-hidden"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div>
+            <h2 className="text-sm font-semibold font-heading flex items-center gap-2" style={{ color: "var(--foreground)" }}>
+              <MapPin className="w-3.5 h-3.5" style={{ color: "var(--primary)" }} />
+              Threat Origin Map
+            </h2>
+            <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+              Top-100 IP IOCs by severity · coordinates cached via ip-api.com
+            </p>
+          </div>
+        </div>
+        <div className="p-4">
+          <GeoMap points={geoPoints} />
+        </div>
+      </div>
 
       {/* ── Recent high-severity IOCs table ───────────────────────────── */}
       <div

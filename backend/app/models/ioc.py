@@ -74,6 +74,13 @@ class IOCModel(Base):
     metadata_: sa.orm.Mapped[Optional[dict]] = sa.orm.mapped_column(
         "metadata", sa.JSON, nullable=True
     )
+    # GeoIP cache — populated on first lookup via ip-api.com batch API
+    latitude: sa.orm.Mapped[Optional[float]] = sa.orm.mapped_column(
+        sa.Float, nullable=True
+    )
+    longitude: sa.orm.Mapped[Optional[float]] = sa.orm.mapped_column(
+        sa.Float, nullable=True
+    )
 
     # Relationships
     sources: sa.orm.Mapped[list] = relationship(
