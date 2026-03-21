@@ -24,6 +24,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser
 from app.api.schemas import (
+    ActivityEvent,
+    ActivityResponse,
     GeoIPPoint,
     GraphEdge,
     GraphNode,
@@ -190,6 +192,44 @@ async def get_stats_trends(
         for row in rows
     ]
     return StatsTrendsResponse(trends=trends)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/stats/activity — last 10 IOC ingestion events
+# ---------------------------------------------------------------------------
+
+
+@stats_router.get("/activity", response_model=ActivityResponse)
+async def get_stats_activity(
+    current_user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ActivityResponse:
+    """Return the 10 most recent IOC ingestion events across all feeds."""
+    result = await session.execute(
+        select(
+            IOCSourceModel.ioc_id,
+            IOCModel.value,
+            IOCModel.type,
+            IOCModel.severity,
+            IOCSourceModel.feed_name,
+            IOCSourceModel.ingested_at,
+        )
+        .join(IOCModel, IOCModel.id == IOCSourceModel.ioc_id)
+        .order_by(IOCSourceModel.ingested_at.desc())
+        .limit(10)
+    )
+    events = [
+        ActivityEvent(
+            ioc_id=row[0],
+            ioc_value=row[1],
+            ioc_type=row[2],
+            severity=float(row[3]) if row[3] is not None else None,
+            feed_name=row[4],
+            ingested_at=row[5],
+        )
+        for row in result
+    ]
+    return ActivityResponse(events=events)
 
 
 # ---------------------------------------------------------------------------

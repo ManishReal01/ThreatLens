@@ -6,7 +6,7 @@ import { fetchApi } from "@/lib/api.client";
 import { getSeverity, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import {
   Activity, ServerCrash, RefreshCw, Zap, Shield, Database,
-  AlertTriangle, ArrowUpRight, Clock, MapPin,
+  AlertTriangle, ArrowUpRight, Clock, MapPin, Radio,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -53,6 +53,15 @@ interface GeoIPPoint {
 interface TrendPoint {
   date: string;
   count: number;
+}
+
+interface ActivityEvent {
+  ioc_id: string;
+  ioc_value: string;
+  ioc_type: string;
+  severity: number | null;
+  feed_name: string;
+  ingested_at: string;
 }
 
 /* ─── Skeleton ───────────────────────────────────────────────────────────── */
@@ -105,17 +114,19 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [geoPoints, setGeoPoints] = useState<GeoIPPoint[]>([]);
   const [trends, setTrends] = useState<TrendPoint[]>([]);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function init() {
       try {
-        const [feedRes, recentRes, statsRes, geoRes, trendsRes] = await Promise.all([
+        const [feedRes, recentRes, statsRes, geoRes, trendsRes, activityRes] = await Promise.all([
           fetchApi("/api/feeds/health"),
           fetchApi("/api/iocs?page_size=8&severity_min=7"),
           fetchApi("/api/stats"),
           fetchApi("/api/stats/geoip").catch(() => []),
           fetchApi("/api/stats/trends").catch(() => ({ trends: [] })),
+          fetchApi("/api/stats/activity").catch(() => ({ events: [] })),
         ]);
 
         setFeeds(feedRes?.feeds ?? []);
@@ -123,6 +134,7 @@ export default function DashboardPage() {
         setStats(statsRes ?? null);
         setGeoPoints(Array.isArray(geoRes) ? geoRes : []);
         setTrends(trendsRes?.trends ?? []);
+        setActivity(activityRes?.events ?? []);
       } catch (err) {
         console.error(err);
         setError("Could not reach the backend. Ensure the API is running at http://127.0.0.1:8000");
@@ -363,6 +375,69 @@ export default function DashboardPage() {
         <div className="p-4">
           <GeoMap points={geoPoints} />
         </div>
+      </div>
+
+      {/* ── Latest Activity feed ──────────────────────────────────────── */}
+      <div
+        className="rounded-lg border border-slate-700/50 overflow-hidden"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div>
+            <h2 className="text-sm font-semibold font-heading flex items-center gap-2" style={{ color: "var(--foreground)" }}>
+              <Radio className="w-3.5 h-3.5" style={{ color: "var(--primary)" }} />
+              Latest Activity
+            </h2>
+            <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+              10 most recent IOC ingestion events across all feeds
+            </p>
+          </div>
+        </div>
+        {activity.length === 0 ? (
+          <div className="flex items-center justify-center h-24 text-xs" style={{ color: "var(--muted-foreground)" }}>
+            No activity yet.
+          </div>
+        ) : (
+          <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+            {activity.map((ev, i) => {
+              const sev = getSeverity(ev.severity);
+              const truncated = ev.ioc_value.length > 40 ? ev.ioc_value.slice(0, 40) + "…" : ev.ioc_value;
+              const when = formatRelativeTime(ev.ingested_at);
+              return (
+                <Link
+                  key={i}
+                  href={`/iocs/${ev.ioc_id}`}
+                  className="flex items-center gap-3 px-4 py-2.5 transition-colors group"
+                  style={{ display: "flex" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(56,189,248,0.04)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
+                >
+                  {/* Severity dot */}
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sev.dotCls}`} />
+                  {/* Message */}
+                  <span className="flex-1 text-xs min-w-0">
+                    <span style={{ color: "var(--muted-foreground)" }}>New </span>
+                    <span className={`font-semibold uppercase tracking-wide text-[10px] ${sev.textCls}`}>
+                      {sev.label}
+                    </span>
+                    <span style={{ color: "var(--muted-foreground)" }}> {ev.ioc_type} </span>
+                    <span className="font-mono" style={{ color: "var(--primary)" }}>{truncated}</span>
+                    <span style={{ color: "var(--muted-foreground)" }}> from </span>
+                    <span className="font-medium" style={{ color: "var(--foreground)" }}>{ev.feed_name}</span>
+                  </span>
+                  {/* Time */}
+                  <span className="text-[10px] flex-shrink-0 font-mono" style={{ color: "var(--muted-foreground)" }}>
+                    {when}
+                  </span>
+                  <ArrowUpRight className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--primary)" }} />
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Recent high-severity IOCs table ───────────────────────────── */}

@@ -244,3 +244,16 @@ class StatsTrend(BaseModel):
 
 class StatsTrendsResponse(BaseModel):
     trends: list[StatsTrend]
+
+
+class ActivityEvent(BaseModel):
+    ioc_id: uuid.UUID
+    ioc_value: str
+    ioc_type: str
+    severity: Optional[float]
+    feed_name: str
+    ingested_at: datetime
+
+
+class ActivityResponse(BaseModel):
+    events: list[ActivityEvent]
