@@ -235,6 +235,7 @@ class GeoIPPoint(BaseModel):
     longitude: float
     severity: Optional[float]
     feed_source: str
+    country: Optional[str] = None
 
 
 class StatsTrend(BaseModel):

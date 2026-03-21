@@ -48,6 +48,7 @@ interface GeoIPPoint {
   longitude: number;
   severity: number | null;
   feed_source: string;
+  country?: string | null;
 }
 
 interface TrendPoint {

@@ -119,7 +119,7 @@ async def get_geoip_data(
     # Fetch top 100 IP IOCs ordered by severity
     result = await session.execute(
         select(IOCModel)
-        .where(IOCModel.type == "ipv4")
+        .where(IOCModel.type == "ip")
         .order_by(IOCModel.severity.desc().nullslast())
         .limit(100)
     )
@@ -137,6 +137,10 @@ async def get_geoip_data(
                     if geo.get("status") == "success":
                         ioc.latitude = geo["lat"]
                         ioc.longitude = geo["lon"]
+                        # Merge country into metadata_ for tooltip display
+                        meta = dict(ioc.metadata_ or {})
+                        meta["country"] = geo.get("country")
+                        ioc.metadata_ = meta
                 await session.commit()
         except Exception as exc:
             logger.warning("GeoIP lookup failed: %s", exc)
@@ -153,6 +157,7 @@ async def get_geoip_data(
             .limit(1)
         )
         feed_name = src_result.scalar_one_or_none() or "unknown"
+        country = (ioc.metadata_ or {}).get("country") if ioc.metadata_ else None
         points.append(
             GeoIPPoint(
                 value=ioc.value,
@@ -160,6 +165,7 @@ async def get_geoip_data(
                 longitude=ioc.longitude,
                 severity=float(ioc.severity) if ioc.severity is not None else None,
                 feed_source=feed_name,
+                country=country,
             )
         )
     return points
