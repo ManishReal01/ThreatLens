@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { fetchApi } from "@/lib/api.client";
 import { getSeverity, severityFilterToParams, formatRelativeTime } from "@/lib/utils";
-import { Search, Loader2, ChevronLeft, ChevronRight, Download, FileJson, Filter, X } from "lucide-react";
+import { Search, Loader2, ChevronLeft, ChevronRight, Download, FileJson, X } from "lucide-react";
 import Link from "next/link";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -25,10 +25,10 @@ interface PaginatedResponse {
   pages: number;
 }
 
-/* ─── Subcomponents ─────────────────────────────────────────────────────── */
+/* ─── Shared badge components ────────────────────────────────────────────── */
 function TypeBadge({ type }: { type: string }) {
   return (
-    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider bg-cyan-950/50 text-cyan-300 ring-1 ring-cyan-500/20">
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider bg-cyan-950/50 text-cyan-400 ring-1 ring-cyan-500/20">
       {type.replace("hash_", "")}
     </span>
   );
@@ -37,46 +37,56 @@ function TypeBadge({ type }: { type: string }) {
 function SevBadge({ score }: { score: number | null | undefined }) {
   const sev = getSeverity(score);
   const ringCls =
-    sev.label === "Critical" ? "ring-red-500/30 bg-red-950/40 text-red-400" :
-    sev.label === "High"     ? "ring-orange-500/30 bg-orange-950/40 text-orange-400" :
-    sev.label === "Medium"   ? "ring-amber-500/30 bg-amber-950/40 text-amber-400" :
-    sev.label === "Low"      ? "ring-blue-500/30 bg-blue-950/40 text-blue-400" :
-                               "ring-slate-500/30 bg-slate-800/40 text-slate-400";
+    sev.label === "Critical" ? "ring-red-500/30 bg-red-950/50 text-red-400" :
+    sev.label === "High"     ? "ring-orange-500/30 bg-orange-950/50 text-orange-400" :
+    sev.label === "Medium"   ? "ring-amber-500/30 bg-amber-950/50 text-amber-400" :
+    sev.label === "Low"      ? "ring-blue-500/30 bg-blue-950/50 text-blue-400" :
+                               "ring-slate-500/30 bg-slate-800/50 text-slate-400";
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-semibold ring-1 ${ringCls}`}>
-      <span className={`w-1 h-1 rounded-full ${sev.dotCls}`} />
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold ring-1 leading-none ${ringCls}`}>
+      <span className={`w-1 h-1 rounded-full flex-shrink-0 ${sev.dotCls}`} />
       {sev.label}
     </span>
   );
 }
 
+const SEL = "h-7 px-2.5 text-[11px] rounded outline-none cursor-pointer appearance-none transition-colors";
+const SEL_STYLE = {
+  background: "rgba(7,13,24,0.8)",
+  border: "1px solid rgba(34,211,238,0.12)",
+  color: "#94a3b8",
+};
+const SEL_FOCUS_STYLE = {
+  background: "rgba(7,13,24,0.9)",
+  border: "1px solid rgba(34,211,238,0.4)",
+  color: "#e2e8f0",
+};
+
 /* ─── Main search component ─────────────────────────────────────────────── */
 function SearchContent() {
-  const router = useRouter();
+  const router     = useRouter();
   const searchParams = useSearchParams();
-  const pathname = usePathname();
+  const pathname   = usePathname();
 
-  const [query, setQuery] = useState(searchParams.get("q") || "");
-  const [type, setType] = useState(searchParams.get("type") || "");
+  const [query,    setQuery]    = useState(searchParams.get("q")        || "");
+  const [type,     setType]     = useState(searchParams.get("type")     || "");
   const [severity, setSeverity] = useState(searchParams.get("severity") || "");
 
   const [results, setResults] = useState<PaginatedResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
 
   const applyFilters = useCallback(() => {
     const params = new URLSearchParams();
-    if (query) params.set("q", query);
-    if (type) params.set("type", type);
+    if (query)    params.set("q",        query);
+    if (type)     params.set("type",     type);
     if (severity) params.set("severity", severity);
     params.set("page", "1");
     router.push(`${pathname}?${params.toString()}`);
   }, [query, type, severity, pathname, router]);
 
   const clearFilters = () => {
-    setQuery("");
-    setType("");
-    setSeverity("");
+    setQuery(""); setType(""); setSeverity("");
     router.push(pathname);
   };
 
@@ -84,34 +94,25 @@ function SearchContent() {
 
   useEffect(() => {
     async function fetchData() {
-      setLoading(true);
-      setError(null);
+      setLoading(true); setError(null);
       try {
-        // Build query params — severity filter maps to numeric range
         const params = new URLSearchParams();
-        const q = searchParams.get("q");
-        const t = searchParams.get("type");
-        const sev = searchParams.get("severity");
+        const q    = searchParams.get("q");
+        const t    = searchParams.get("type");
+        const sev  = searchParams.get("severity");
         const page = searchParams.get("page") || "1";
-
-        if (q) params.set("q", q);
-        if (t) params.set("type", t);
-        if (sev) {
-          const sevParams = severityFilterToParams(sev);
-          Object.entries(sevParams).forEach(([k, v]) => params.set(k, v));
-        }
-        params.set("page", page);
+        if (q)   params.set("q",    q);
+        if (t)   params.set("type", t);
+        if (sev) { const sp = severityFilterToParams(sev); Object.entries(sp).forEach(([k, v]) => params.set(k, v)); }
+        params.set("page",      page);
         params.set("page_size", "25");
-
         const res = await fetchApi(`/api/iocs?${params.toString()}`);
         setResults(res);
       } catch (err) {
         console.error(err);
         setError("Failed to fetch results. Ensure the API is running.");
         setResults(null);
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     }
     fetchData();
   }, [searchParams]);
@@ -124,16 +125,12 @@ function SearchContent() {
 
   const currentPage = parseInt(searchParams.get("page") || "1", 10);
 
-  /* ── Export ──────────────────────────────────────────────────────────── */
   const handleExportCSV = () => {
     if (!results) return;
     const headers = ["Indicator", "Type", "Severity Score", "Severity Label", "Sources", "Last Seen"];
     const rows = results.items.map((item) => [
-      `"${item.value}"`,
-      item.type,
-      item.severity ?? "",
-      getSeverity(item.severity).label,
-      item.source_count,
+      `"${item.value}"`, item.type, item.severity ?? "",
+      getSeverity(item.severity).label, item.source_count,
       new Date(item.last_seen).toISOString(),
     ]);
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
@@ -152,123 +149,145 @@ function SearchContent() {
     link.click();
   };
 
-  /* ── Render ──────────────────────────────────────────────────────────── */
   return (
-    <div className="space-y-4 animate-in fade-in duration-400">
+    <div className="space-y-2 animate-in fade-in duration-400">
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      {/* ── Page header ─────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold font-heading tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
-            IOC Search
-          </h1>
-          <p className="text-xs mt-0.5 text-slate-500">Search across all threat intelligence feeds</p>
+          <h1 className="text-sm font-bold uppercase tracking-widest font-mono text-slate-200">IOC Search</h1>
+          <p className="text-[9px] mt-0.5 text-slate-600 uppercase tracking-wider">All threat intelligence feeds</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={handleExportCSV}
             disabled={!results || results.items.length === 0}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium disabled:opacity-40 transition-all bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200"
+            className="flex items-center gap-1 px-2 py-1 rounded text-[9px] font-mono uppercase tracking-wider disabled:opacity-30 transition-all"
+            style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)", color: "#22d3ee" }}
           >
-            <Download className="w-3 h-3" /> CSV
+            <Download className="w-2.5 h-2.5" /> CSV
           </button>
           <button
             onClick={handleExportJSON}
             disabled={!results || results.items.length === 0}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium disabled:opacity-40 transition-all bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200"
+            className="flex items-center gap-1 px-2 py-1 rounded text-[9px] font-mono uppercase tracking-wider disabled:opacity-30 transition-all"
+            style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.15)", color: "#22d3ee" }}
           >
-            <FileJson className="w-3 h-3" /> JSON
+            <FileJson className="w-2.5 h-2.5" /> JSON
           </button>
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[180px]">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none text-slate-500" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-              placeholder="Search IPs, domains, hashes, URLs…"
-              className="w-full h-8 pl-8 pr-3 rounded-md text-sm bg-slate-900 border border-slate-700 outline-none transition-colors focus:border-cyan-700 text-slate-200 placeholder:text-slate-600"
-            />
-          </div>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="h-8 px-2 rounded-md text-xs border outline-none cursor-pointer appearance-none bg-slate-900 border-slate-700 text-slate-400"
-          >
-            <option value="">All Types</option>
-            <option value="ipv4">IPv4</option>
-            <option value="domain">Domain</option>
-            <option value="url">URL</option>
-            <option value="hash_md5">Hash MD5</option>
-            <option value="hash_sha256">Hash SHA256</option>
-          </select>
-          <select
-            value={severity}
-            onChange={(e) => setSeverity(e.target.value)}
-            className="h-8 px-2 rounded-md text-xs border outline-none cursor-pointer appearance-none bg-slate-900 border-slate-700 text-slate-400"
-          >
-            <option value="">All Severities</option>
-            <option value="critical">Critical (≥8.5)</option>
-            <option value="high">High (7.0–8.9)</option>
-            <option value="medium">Medium (4.0–6.9)</option>
-            <option value="low">Low (&lt;4.0)</option>
-          </select>
+      {/* ── Filter bar ── all in one horizontal row ──────────────────────── */}
+      <div
+        className="flex items-center gap-2 px-3 py-2 rounded-lg flex-wrap"
+        style={{ background: "rgba(10,16,32,0.7)", border: "1px solid rgba(34,211,238,0.1)" }}
+      >
+        {/* Search input */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-600 pointer-events-none" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+            placeholder="IPs · domains · hashes · URLs…"
+            className="w-full h-7 pl-7 pr-3 rounded text-[11px] font-mono outline-none transition-all placeholder:text-slate-700"
+            style={{ background: "rgba(7,13,24,0.8)", border: "1px solid rgba(34,211,238,0.12)", color: "#e2e8f0" }}
+            onFocus={(e) => (e.target.style.borderColor = "rgba(34,211,238,0.4)")}
+            onBlur={(e)  => (e.target.style.borderColor = "rgba(34,211,238,0.12)")}
+          />
+        </div>
+
+        {/* Type select */}
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value)}
+          className={SEL}
+          style={SEL_STYLE}
+          onFocus={(e) => Object.assign(e.target.style, SEL_FOCUS_STYLE)}
+          onBlur={(e)  => Object.assign(e.target.style, SEL_STYLE)}
+        >
+          <option value="">All Types</option>
+          <option value="ip">IP</option>
+          <option value="domain">Domain</option>
+          <option value="url">URL</option>
+          <option value="hash_md5">MD5</option>
+          <option value="hash_sha256">SHA256</option>
+        </select>
+
+        {/* Severity select */}
+        <select
+          value={severity}
+          onChange={(e) => setSeverity(e.target.value)}
+          className={SEL}
+          style={SEL_STYLE}
+          onFocus={(e) => Object.assign(e.target.style, SEL_FOCUS_STYLE)}
+          onBlur={(e)  => Object.assign(e.target.style, SEL_STYLE)}
+        >
+          <option value="">All Severities</option>
+          <option value="critical">Critical ≥8.5</option>
+          <option value="high">High 7.0–8.9</option>
+          <option value="medium">Medium 4.0–6.9</option>
+          <option value="low">Low &lt;4.0</option>
+        </select>
+
+        {/* Apply */}
+        <button
+          onClick={applyFilters}
+          className="h-7 flex items-center gap-1.5 px-3 rounded text-[10px] font-bold uppercase tracking-wider transition-all"
+          style={{ background: "rgba(34,211,238,0.15)", border: "1px solid rgba(34,211,238,0.3)", color: "#22d3ee" }}
+        >
+          <Search className="w-2.5 h-2.5" />
+          Search
+        </button>
+
+        {/* Clear */}
+        {hasFilters && (
           <button
-            onClick={applyFilters}
-            className="h-8 flex items-center gap-1.5 px-3 rounded-md text-xs font-medium transition-all bg-cyan-600 hover:bg-cyan-500 text-white"
+            onClick={clearFilters}
+            className="h-7 flex items-center gap-1 px-2.5 rounded text-[10px] font-mono uppercase tracking-wider transition-all"
+            style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171" }}
           >
-            <Filter className="w-3 h-3" />
-            Search
+            <X className="w-2.5 h-2.5" /> Clear
           </button>
-          {hasFilters && (
-            <button
-              onClick={clearFilters}
-              className="h-8 flex items-center gap-1.5 px-3 rounded-md text-xs font-medium transition-all bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200"
-            >
-              <X className="w-3 h-3" />
-              Clear
-            </button>
-          )}
-        </div>
+        )}
+
+        {/* Result count */}
+        {results && (
+          <span className="ml-auto text-[9px] font-mono text-slate-600 tabular-nums">
+            {results.total.toLocaleString()} result{results.total !== 1 ? "s" : ""}
+            {results.pages > 1 && ` · p${results.page}/${results.pages}`}
+          </span>
+        )}
       </div>
 
-      {/* Results table */}
-      <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
-        {/* Table meta */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800/60">
-          <span className="text-[9px] uppercase tracking-wider text-slate-500">
-            {results ? `${results.total.toLocaleString()} result${results.total !== 1 ? "s" : ""}` : loading ? "Searching…" : ""}
-          </span>
-          {results && results.pages > 1 && (
-            <span className="text-[9px] text-slate-500">Page {results.page} of {results.pages}</span>
-          )}
-        </div>
-
-        {error && <div className="flex items-center gap-2 px-4 py-8 text-xs text-red-400">{error}</div>}
+      {/* ── Results table ─────────────────────────────────────────────────── */}
+      <div
+        className="rounded-lg overflow-hidden"
+        style={{ background: "rgba(10,16,32,0.7)", border: "1px solid rgba(34,211,238,0.1)" }}
+      >
+        {error && (
+          <div className="flex items-center gap-2 px-4 py-6 text-xs text-red-400">{error}</div>
+        )}
         {loading && (
           <div className="flex items-center justify-center h-32">
             <Loader2 className="w-5 h-5 animate-spin text-cyan-500" />
           </div>
         )}
         {!loading && !error && results && results.items.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-32 gap-2 text-xs text-slate-500">
-            <Search className="w-8 h-8 opacity-20" />
-            No indicators match your search criteria.
+          <div className="flex flex-col items-center justify-center h-32 gap-2">
+            <Search className="w-7 h-7 text-slate-700" />
+            <p className="text-[10px] uppercase tracking-wider text-slate-600">No indicators match your search</p>
           </div>
         )}
 
         {!loading && results && results.items.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-800/60">
+                <tr style={{ borderBottom: "1px solid rgba(34,211,238,0.08)", background: "rgba(34,211,238,0.02)" }}>
                   {["Indicator", "Type", "Score", "Severity", "Sources", "Last Seen"].map((h) => (
-                    <th key={h} className="text-left px-4 py-2 text-[9px] uppercase tracking-wider font-semibold text-slate-500">
+                    <th key={h} className="text-left px-3 py-2 text-[8px] uppercase tracking-widest font-bold text-slate-600 font-mono">
                       {h}
                     </th>
                   ))}
@@ -277,28 +296,41 @@ function SearchContent() {
               <tbody>
                 {results.items.map((ioc) => {
                   const sev = getSeverity(ioc.severity);
+                  const sevColor =
+                    sev.label === "Critical" ? "#ef4444" :
+                    sev.label === "High"     ? "#f97316" :
+                    sev.label === "Medium"   ? "#f59e0b" : "#3b82f6";
                   return (
                     <tr
                       key={ioc.id}
-                      className="group transition-colors cursor-pointer hover:bg-cyan-950/30 border-b border-slate-800/40 last:border-b-0"
+                      className="group transition-colors cursor-pointer"
+                      style={{ borderBottom: "1px solid rgba(34,211,238,0.04)" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(8,28,44,0.8)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "")}
                     >
-                      <td className="px-4 py-2">
-                        <Link href={`/iocs/${ioc.id}`} className="font-mono font-medium hover:underline truncate max-w-[240px] block text-cyan-300">
+                      <td className="px-3 py-1.5">
+                        <Link
+                          href={`/iocs/${ioc.id}`}
+                          className="font-mono text-[11px] font-medium text-cyan-300 hover:text-cyan-200 hover:underline truncate max-w-[280px] block transition-colors"
+                        >
                           {ioc.value}
                         </Link>
                       </td>
-                      <td className="px-4 py-2"><TypeBadge type={ioc.type} /></td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-12 h-1 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
-                            <div className={`h-full rounded-full ${sev.barCls}`} style={{ width: `${((ioc.severity ?? 0) / 10) * 100}%` }} />
+                      <td className="px-3 py-1.5"><TypeBadge type={ioc.type} /></td>
+                      <td className="px-3 py-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-14 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${((ioc.severity ?? 0) / 10) * 100}%`, background: sevColor, boxShadow: `0 0 4px ${sevColor}60` }}
+                            />
                           </div>
-                          <span className="tabular-nums font-mono text-slate-300">{(ioc.severity ?? 0).toFixed(1)}</span>
+                          <span className="tabular-nums font-mono text-[10px] text-slate-400">{(ioc.severity ?? 0).toFixed(1)}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-2"><SevBadge score={ioc.severity} /></td>
-                      <td className="px-4 py-2 tabular-nums text-slate-500">{ioc.source_count}</td>
-                      <td className="px-4 py-2 font-mono text-slate-500">{formatRelativeTime(ioc.last_seen)}</td>
+                      <td className="px-3 py-1.5"><SevBadge score={ioc.severity} /></td>
+                      <td className="px-3 py-1.5 tabular-nums text-[10px] font-mono text-slate-600">{ioc.source_count}</td>
+                      <td className="px-3 py-1.5 font-mono text-[10px] text-slate-600">{formatRelativeTime(ioc.last_seen)}</td>
                     </tr>
                   );
                 })}
@@ -309,21 +341,26 @@ function SearchContent() {
 
         {/* Pagination */}
         {!loading && results && results.pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-2 border-t border-slate-800/60">
+          <div
+            className="flex items-center justify-between px-3 py-2"
+            style={{ borderTop: "1px solid rgba(34,211,238,0.07)" }}
+          >
             <button
               onClick={() => changePage(currentPage - 1)}
               disabled={currentPage <= 1}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs disabled:opacity-40 transition-all bg-slate-800 border border-slate-700 text-slate-400"
+              className="flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-mono uppercase tracking-wider disabled:opacity-30 transition-all"
+              style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.12)", color: "#94a3b8" }}
             >
-              <ChevronLeft className="w-3.5 h-3.5" /> Prev
+              <ChevronLeft className="w-3 h-3" /> Prev
             </button>
-            <span className="text-[9px] text-slate-500">{currentPage} / {results.pages}</span>
+            <span className="text-[9px] font-mono text-slate-600">{currentPage} / {results.pages}</span>
             <button
               onClick={() => changePage(currentPage + 1)}
               disabled={currentPage >= results.pages}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs disabled:opacity-40 transition-all bg-slate-800 border border-slate-700 text-slate-400"
+              className="flex items-center gap-1 px-2.5 py-1 rounded text-[9px] font-mono uppercase tracking-wider disabled:opacity-30 transition-all"
+              style={{ background: "rgba(34,211,238,0.05)", border: "1px solid rgba(34,211,238,0.12)", color: "#94a3b8" }}
             >
-              Next <ChevronRight className="w-3.5 h-3.5" />
+              Next <ChevronRight className="w-3 h-3" />
             </button>
           </div>
         )}
@@ -336,9 +373,9 @@ export default function SearchPage() {
   return (
     <Suspense
       fallback={
-        <div className="space-y-4">
-          <div className="skeleton h-9 w-48" />
-          <div className="skeleton h-14" />
+        <div className="space-y-2">
+          <div className="skeleton h-8 w-48" />
+          <div className="skeleton h-10" />
           <div className="skeleton h-72" />
         </div>
       }
