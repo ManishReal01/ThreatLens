@@ -18,12 +18,6 @@ interface AlertItemProps {
   isNew: boolean;
 }
 
-const FEED_SHORT: Record<string, string> = {
-  abuseipdb: "AIPDB",
-  urlhaus:   "UHAUS",
-  otx:       "OTX",
-};
-
 function AlertItem({ alert, isNew }: AlertItemProps) {
   const sev = getSeverity(alert.severity);
   return (
@@ -63,7 +57,6 @@ export default function AlertTicker() {
   const [alerts, setAlerts] = useState<IOCAlert[]>([]);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const knownIds = useRef<Set<string>>(new Set());
-  const [pulse, setPulse] = useState(true);
 
   async function fetchAlerts() {
     try {
@@ -83,7 +76,6 @@ export default function AlertTicker() {
 
       items.forEach((a) => knownIds.current.add(a.id));
       setAlerts(items);
-      setPulse((p) => !p); // toggle to trigger visual pulse
     } catch {
       // Silently ignore — this is a non-critical ticker
     }
