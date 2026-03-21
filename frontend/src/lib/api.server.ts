@@ -1,23 +1,18 @@
-import { createClient as createServerSupabaseClient } from "./supabase/server";
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
 
 export async function fetchApiServer(endpoint: string, options: RequestInit = {}) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  
   const headers = new Headers(options.headers);
-  if (session?.access_token) {
-    headers.set("Authorization", `Bearer ${session.access_token}`);
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
-  
-  const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
-  const res = await fetch(`${baseUrl}${endpoint}`, {
-    ...options,
-    headers,
-  });
-  
+
+  const url = endpoint.startsWith("http") ? endpoint : `${BACKEND_URL}${endpoint}`;
+  const res = await fetch(url, { ...options, headers });
+
   if (!res.ok) {
-    throw new Error(`API Error: ${res.statusText}`);
+    throw new Error(`API Error ${res.status}: ${res.statusText}`);
   }
-  
+
+  if (res.status === 204) return null;
   return res.json();
 }

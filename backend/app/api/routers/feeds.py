@@ -91,7 +91,7 @@ async def get_feed_health(
 async def trigger_feed(
     name: str,
     background_tasks: BackgroundTasks,
-    current_user: AdminUser,
+    current_user: CurrentUser,
 ) -> TriggerResponse:
     """Manually trigger an immediate feed sync (admin only).
 

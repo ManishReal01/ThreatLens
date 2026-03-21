@@ -1,27 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { LayoutDashboard, Search, Bookmark, LogOut, ShieldHalf, Radio, ChevronRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { LayoutDashboard, Search, Bookmark, ShieldHalf, Radio, ChevronRight } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const supabase = createClient();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setUserEmail(data.user.email ?? null);
-    });
-  }, [supabase.auth]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/auth/login");
-  };
 
   const navItems = [
     { href: "/",                    label: "Overview",   icon: LayoutDashboard, desc: "System status" },
@@ -31,8 +15,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
-
-  const userInitial = userEmail ? userEmail[0].toUpperCase() : "A";
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -49,7 +31,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           className="h-14 flex items-center gap-2.5 px-4 border-b flex-shrink-0 relative overflow-hidden"
           style={{ borderColor: "var(--sidebar-border)" }}
         >
-          {/* Grid accent */}
           <div className="absolute inset-0 bg-grid-ops opacity-60 pointer-events-none" />
           <div
             className="relative z-10 w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
@@ -141,30 +122,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5 px-2 py-1.5 rounded group"
+          <div className="flex items-center gap-2.5 px-2 py-1.5 rounded"
             style={{ background: "var(--accent)", border: "1px solid var(--border)" }}>
             <div
               className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 font-heading"
               style={{ background: "rgba(56,189,248,0.15)", color: "var(--primary)", border: "1px solid rgba(56,189,248,0.25)" }}
             >
-              {userInitial}
+              A
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-medium truncate" style={{ color: "var(--foreground)" }}>
-                {userEmail ? userEmail.split("@")[0] : "Analyst"}
+                Analyst
               </div>
               <div className="text-[9px] truncate" style={{ color: "var(--muted-foreground)" }}>
-                {userEmail ? userEmail.split("@")[1] || "local" : ""}
+                local
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded"
-              style={{ color: "var(--muted-foreground)" }}
-              title="Logout"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
       </aside>

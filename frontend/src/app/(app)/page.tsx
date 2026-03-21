@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api.client";
-import { createClient } from "@/lib/supabase/client";
 import { getSeverity, formatRelativeTime, formatDateTime } from "@/lib/utils";
 import {
   Activity, ServerCrash, RefreshCw, Zap, Shield, Database,
@@ -81,7 +80,6 @@ function SevBadge({ score }: { score: number | null | undefined }) {
 
 /* ─── Main component ────────────────────────────────────────────────────── */
 export default function DashboardPage() {
-  const [isAdmin, setIsAdmin] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [feeds, setFeeds] = useState<FeedHealth[]>([]);
@@ -91,10 +89,6 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function init() {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.app_metadata?.role === "admin") setIsAdmin(true);
-
       try {
         const [feedRes, recentRes, totalRes, critRes] = await Promise.all([
           fetchApi("/api/feeds/health"),
@@ -178,8 +172,7 @@ export default function DashboardPage() {
             Real-time ingest pipeline &amp; threat telemetry
           </p>
         </div>
-        {isAdmin && (
-          <button
+        <button
             onClick={() => handleSync("otx")}
             disabled={syncing}
             className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-all disabled:opacity-50"
@@ -192,7 +185,6 @@ export default function DashboardPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
             Trigger Sync
           </button>
-        )}
       </div>
 
       {/* ── Feed health cards ─────────────────────────────────────────── */}
