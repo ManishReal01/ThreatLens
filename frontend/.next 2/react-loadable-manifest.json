@@ -1,0 +1,20 @@
+{
+  "app/(app)/page.tsx -> @/components/AlertTicker": {
+    "id": "app/(app)/page.tsx -> @/components/AlertTicker",
+    "files": [
+      "static/chunks/_app-pages-browser_src_components_AlertTicker_tsx.js"
+    ]
+  },
+  "app/(app)/page.tsx -> @/components/GeoMap": {
+    "id": "app/(app)/page.tsx -> @/components/GeoMap",
+    "files": [
+      "static/chunks/_app-pages-browser_src_components_GeoMap_tsx.js"
+    ]
+  },
+  "app/(app)/page.tsx -> @/components/TrendChart": {
+    "id": "app/(app)/page.tsx -> @/components/TrendChart",
+    "files": [
+      "static/chunks/_app-pages-browser_src_components_TrendChart_tsx.js"
+    ]
+  }
+}
