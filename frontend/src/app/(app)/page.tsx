@@ -32,10 +32,9 @@ interface IOCListItem {
 }
 
 interface Stats {
-  total: number;
-  critical: number;
-  high: number;
-  active: number;
+  total_iocs: number;
+  iocs_by_type: Record<string, number>;
+  iocs_by_severity: Record<string, number>;
 }
 
 /* ─── Skeleton ───────────────────────────────────────────────────────────── */
@@ -91,23 +90,15 @@ export default function DashboardPage() {
   useEffect(() => {
     async function init() {
       try {
-        const [feedRes, recentRes, totalRes, critRes] = await Promise.all([
+        const [feedRes, recentRes, statsRes] = await Promise.all([
           fetchApi("/api/feeds/health"),
           fetchApi("/api/iocs?page_size=8&severity_min=7"),
-          fetchApi("/api/iocs?page_size=1"),
-          fetchApi("/api/iocs?page_size=1&severity_min=9"),
+          fetchApi("/api/stats"),
         ]);
 
         setFeeds(feedRes?.feeds ?? []);
         setRecentIOCs(recentRes?.items ?? []);
-
-        const highRes = await fetchApi("/api/iocs?page_size=1&severity_min=7&severity_max=8.99");
-        setStats({
-          total: totalRes?.total ?? 0,
-          critical: critRes?.total ?? 0,
-          high: highRes?.total ?? 0,
-          active: recentRes?.total ?? 0,
-        });
+        setStats(statsRes ?? null);
       } catch (err) {
         console.error(err);
         setError("Could not reach the backend. Ensure the API is running at http://127.0.0.1:8000");
@@ -261,10 +252,10 @@ export default function DashboardPage() {
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { label: "Total IOCs",  value: stats.total,    icon: Database,    color: "var(--primary)",  bg: "rgba(56,189,248,0.08)"   },
-            { label: "Critical",    value: stats.critical, icon: AlertTriangle, color: "#f87171",      bg: "rgba(239,68,68,0.08)"    },
-            { label: "High",        value: stats.high,     icon: Zap,         color: "#fb923c",        bg: "rgba(249,115,22,0.08)"   },
-            { label: "In Scope",    value: stats.active,   icon: Shield,      color: "#4ade80",        bg: "rgba(34,197,94,0.08)"    },
+            { label: "Total IOCs", value: stats.total_iocs,                        icon: Database,      color: "var(--primary)", bg: "rgba(56,189,248,0.08)"  },
+            { label: "Critical",   value: stats.iocs_by_severity.critical ?? 0,    icon: AlertTriangle, color: "#f87171",        bg: "rgba(239,68,68,0.08)"   },
+            { label: "High",       value: stats.iocs_by_severity.high ?? 0,        icon: Zap,           color: "#fb923c",        bg: "rgba(249,115,22,0.08)"  },
+            { label: "Medium",     value: stats.iocs_by_severity.medium ?? 0,      icon: Shield,        color: "#4ade80",        bg: "rgba(34,197,94,0.08)"   },
           ].map(({ label, value, icon: Icon, color, bg }) => (
             <div
               key={label}

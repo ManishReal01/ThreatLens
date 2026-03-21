@@ -27,6 +27,7 @@ from app.api.schemas import (
     IOCSourceResponse,
     NoteResponse,
     PaginatedIOCResponse,
+    StatsResponse,
     TagResponse,
 )
 from app.db.session import get_db
@@ -39,10 +40,55 @@ from app.models import (
 )
 
 router = APIRouter(prefix="/api/iocs", tags=["iocs"])
+stats_router = APIRouter(prefix="/api/stats", tags=["stats"])
 
 _MAX_PAGE_SIZE = 100
 _GRAPH_MAX_HOPS = 3
 _GRAPH_MAX_NODES = 100
+
+
+# ---------------------------------------------------------------------------
+# GET /api/stats — dashboard aggregate counts
+# ---------------------------------------------------------------------------
+
+
+@stats_router.get("", response_model=StatsResponse)
+async def get_stats(
+    current_user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> StatsResponse:
+    """Return total IOC counts broken down by type and severity band."""
+    total_result = await session.execute(select(func.count()).select_from(IOCModel))
+    total_iocs: int = total_result.scalar_one()
+
+    by_type_result = await session.execute(
+        select(IOCModel.type, func.count().label("cnt"))
+        .group_by(IOCModel.type)
+    )
+    iocs_by_type: dict[str, int] = {row[0]: row[1] for row in by_type_result}
+
+    # Single pass: count each severity band with CASE/SUM to avoid 4 queries.
+    band_result = await session.execute(
+        select(
+            func.sum(sa.case((IOCModel.severity >= 9, 1), else_=0)).label("critical"),
+            func.sum(sa.case((sa.and_(IOCModel.severity >= 7, IOCModel.severity < 9), 1), else_=0)).label("high"),
+            func.sum(sa.case((sa.and_(IOCModel.severity >= 4, IOCModel.severity < 7), 1), else_=0)).label("medium"),
+            func.sum(sa.case((IOCModel.severity < 4, 1), else_=0)).label("low"),
+        )
+    )
+    band_row = band_result.one()
+    iocs_by_severity: dict[str, int] = {
+        "critical": int(band_row[0] or 0),
+        "high":     int(band_row[1] or 0),
+        "medium":   int(band_row[2] or 0),
+        "low":      int(band_row[3] or 0),
+    }
+
+    return StatsResponse(
+        total_iocs=total_iocs,
+        iocs_by_type=iocs_by_type,
+        iocs_by_severity=iocs_by_severity,
+    )
 
 
 # ---------------------------------------------------------------------------

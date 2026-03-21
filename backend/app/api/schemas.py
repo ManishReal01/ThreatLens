@@ -150,3 +150,15 @@ class FeedHealthResponse(BaseModel):
 class TriggerResponse(BaseModel):
     status: str
     feed: str
+
+
+# ---------------------------------------------------------------------------
+# Dashboard stats
+# ---------------------------------------------------------------------------
+
+
+class StatsResponse(BaseModel):
+    total_iocs: int
+    iocs_by_type: dict[str, int]
+    # Severity bands: critical (>=9), high (7–8.99), medium (4–6.99), low (<4)
+    iocs_by_severity: dict[str, int]

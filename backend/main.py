@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import feeds, iocs
+from app.api.routers.iocs import stats_router
 from app.api.routers.workspace import ioc_workspace_router, watchlist_router
 from app.config import settings
 from app.feeds.scheduler import create_scheduler
@@ -49,6 +50,7 @@ app.add_middleware(
 )
 
 app.include_router(iocs.router)
+app.include_router(stats_router)
 app.include_router(feeds.router)
 app.include_router(watchlist_router)
 app.include_router(ioc_workspace_router)
