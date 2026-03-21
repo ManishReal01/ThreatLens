@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import ClassVar, Optional
 
 import httpx
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from tenacity import (
     AsyncRetrying,
@@ -111,6 +112,11 @@ class BaseFeedWorker(ABC):
             session.add(feed_run)
             await session.commit()
             return feed_run
+
+        # Disable per-statement timeout for the duration of this feed run.
+        # Supabase sets a default statement_timeout that kills long bulk upserts.
+        # SET (session-level) persists across commits unlike SET LOCAL.
+        await session.execute(text("SET statement_timeout = 0"))
 
         feed_run = FeedRunModel(feed_name=self.FEED_NAME, status="running")
         session.add(feed_run)

@@ -1,7 +1,7 @@
 """URLhaus feed adapter (abuse.ch).
 
-API endpoint: POST https://urlhaus-api.abuse.ch/v1/urls/recent/
-Auth:         None required
+API endpoint: GET https://urlhaus-api.abuse.ch/v1/urls/recent/
+Auth:         Auth-Key: {urlhaus_api_key}  (register at https://abuse.ch/)
 Rate limits:  No documented rate limit; URLhaus encourages polling
 
 Response shape::
@@ -44,7 +44,6 @@ from app.normalization.upsert import upsert_ioc
 logger = logging.getLogger(__name__)
 
 _RECENT_URLS_ENDPOINT = "https://urlhaus-api.abuse.ch/v1/urls/recent/"
-_FETCH_LIMIT = 500  # URLs per request; URLhaus free API max is ~1000
 
 _STATUS_CONFIDENCE: dict[str, float] = {
     "online": 0.9,
@@ -63,18 +62,16 @@ class URLhausWorker(BaseFeedWorker):
     FEED_NAME = "urlhaus"
 
     def is_configured(self) -> bool:
-        # URLhaus requires no API key — always ready to run
-        return True
+        return bool(self.settings.urlhaus_api_key)
 
     async def fetch_and_normalize(
         self,
         session: AsyncSession,
         feed_run_id: str,
     ) -> tuple[int, int, int]:
-        response = await self._post(
+        response = await self._get(
             _RECENT_URLS_ENDPOINT,
-            data={"limit": _FETCH_LIMIT},
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            headers={"Auth-Key": self.settings.urlhaus_api_key},
         )
 
         body = response.json()

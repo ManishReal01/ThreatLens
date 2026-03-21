@@ -16,7 +16,12 @@ engine = create_async_engine(
     # PgBouncer (Supabase Session Pooler) routes transactions across backend
     # connections, which breaks asyncpg's prepared-statement cache.
     # Disabling it prevents QueryCanceledError / statement-timeout failures.
-    connect_args={"statement_cache_size": 0},
+    # statement_timeout=0 disables Supabase's default per-statement timeout so
+    # bulk feed upserts are not cancelled mid-run.
+    connect_args={
+        "statement_cache_size": 0,
+        "server_settings": {"statement_timeout": "0"},
+    },
 )
 
 AsyncSessionLocal = async_sessionmaker(

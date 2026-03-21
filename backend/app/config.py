@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     # Feed API keys (empty string = feed disabled; worker skips if not configured)
     abuseipdb_api_key: str = ""
     otx_api_key: str = ""
+    # abuse.ch URLhaus now requires authentication (API key from https://abuse.ch/)
+    urlhaus_api_key: str = ""
 
     # Feed schedule intervals (minutes)
     # AbuseIPDB free tier: 1000 API calls/day → one bulk call every 6h = 4 calls/day
@@ -28,11 +30,11 @@ class Settings(BaseSettings):
     abuseipdb_days_back: int = 1
 
     # OTX: max pulses to fetch per page (pagination stops at "next": null)
-    otx_pulse_limit: int = 50
+    otx_pulse_limit: int = 20
 
     # OTX: max pages to fetch on the very first run (no prior sync timestamp).
     # Subsequent delta runs are uncapped — they only pull recently-modified pulses.
-    otx_max_pages_first_run: int = 10
+    otx_max_pages_first_run: int = 1
 
     model_config = SettingsConfigDict(
         env_file=".env",

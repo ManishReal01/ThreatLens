@@ -149,9 +149,10 @@ class OTXWorker(BaseFeedWorker):
                 new += pulse_new
                 updated += pulse_updated
 
-            # Commit after each page to avoid long-lived transactions that
-            # can trigger statement timeouts through the Supabase session pooler.
-            await session.commit()
+                # Commit after each pulse to keep transactions short and avoid
+                # Supabase session-pooler statement timeouts on bulk upserts.
+                await session.commit()
+
             logger.debug("OTX page %d committed (%d new, %d updated so far)", page_num + 1, new, updated)
 
             next_url = body.get("next")  # None stops the loop
@@ -189,8 +190,10 @@ class OTXWorker(BaseFeedWorker):
             else:
                 updated += 1
 
-        # Build co-occurrence graph for all IOCs that appeared in this pulse
-        if len(ioc_ids) >= 2:
+        # Build co-occurrence graph — cap at 20 IOC IDs to avoid O(n²) INSERT
+        # explosion on large pulses (e.g., 100 indicators → 4,950 edge inserts).
+        _MAX_COOCCURRENCE_IDS = 20
+        if 2 <= len(ioc_ids) <= _MAX_COOCCURRENCE_IDS:
             await infer_cooccurrence_relationships(
                 session=session,
                 ioc_ids=ioc_ids,

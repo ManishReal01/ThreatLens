@@ -1,6 +1,7 @@
 """APScheduler wiring — one job per feed, wired into FastAPI lifespan."""
 
 import logging
+from datetime import datetime, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -38,6 +39,8 @@ def create_scheduler(settings: Settings) -> AsyncIOScheduler:
     """Return a configured AsyncIOScheduler (not yet started)."""
     scheduler = AsyncIOScheduler()
 
+    now = datetime.now(timezone.utc)
+
     scheduler.add_job(
         _run_abuseipdb,
         trigger="interval",
@@ -48,6 +51,7 @@ def create_scheduler(settings: Settings) -> AsyncIOScheduler:
         replace_existing=True,
         max_instances=1,       # prevent overlap if a run takes longer than the interval
         misfire_grace_time=300,
+        next_run_time=now,     # run immediately on startup
     )
 
     scheduler.add_job(
@@ -60,6 +64,7 @@ def create_scheduler(settings: Settings) -> AsyncIOScheduler:
         replace_existing=True,
         max_instances=1,
         misfire_grace_time=300,
+        next_run_time=now,     # run immediately on startup
     )
 
     scheduler.add_job(
@@ -72,6 +77,7 @@ def create_scheduler(settings: Settings) -> AsyncIOScheduler:
         replace_existing=True,
         max_instances=1,
         misfire_grace_time=300,
+        next_run_time=now,     # run immediately on startup
     )
 
     logger.info(
