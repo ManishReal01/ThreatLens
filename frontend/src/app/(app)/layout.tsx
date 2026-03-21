@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Search, Bookmark, ShieldHalf, Radio, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Search, Bookmark, ShieldHalf, Radio, ChevronRight, Users } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const navItems = [
-    { href: "/",                    label: "Overview",   icon: LayoutDashboard, desc: "System status" },
-    { href: "/search",              label: "IOC Search", icon: Search,           desc: "Find indicators" },
-    { href: "/workspace/watchlist", label: "Watchlist",  icon: Bookmark,         desc: "Monitored IOCs" },
+    { href: "/",                    label: "Overview",       icon: LayoutDashboard, desc: "System status" },
+    { href: "/search",              label: "IOC Search",     icon: Search,           desc: "Find indicators" },
+    { href: "/threat-actors",       label: "Threat Actors",  icon: Users,            desc: "MITRE ATT&CK" },
+    { href: "/workspace/watchlist", label: "Watchlist",      icon: Bookmark,         desc: "Monitored IOCs" },
   ];
 
   const isActive = (href: string) =>

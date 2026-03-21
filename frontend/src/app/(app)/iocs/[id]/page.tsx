@@ -6,12 +6,20 @@ import { getSeverity, formatDate, formatDateTime } from "@/lib/utils";
 import {
   ArrowLeft, Network, ShieldAlert, Tag, MessageSquare,
   Clock, X, Edit3, Trash2, Save, Bookmark, BookmarkCheck,
-  Layers, AlertTriangle, ChevronRight,
+  Layers, AlertTriangle, ChevronRight, Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 /* ─── Types (matching backend schemas.py) ─────────────────────────────── */
+interface ThreatActorLink {
+  id: string;
+  mitre_id: string;
+  name: string;
+  country: string | null;
+  motivations: string[];
+  confidence: number | null;
+}
 interface IOCSource {
   id: string;
   feed_name: string;
@@ -75,6 +83,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isWatched, setIsWatched] = useState(false);
+  const [threatActors, setThreatActors] = useState<ThreatActorLink[]>([]);
 
   const [newTag, setNewTag] = useState("");
   const [newNote, setNewNote] = useState("");
@@ -92,6 +101,10 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
           const items: { id: string }[] = wl?.items ?? wl ?? [];
           setIsWatched(items.some((item) => item.id === id));
         } catch { /* watchlist check is non-critical */ }
+        try {
+          const actors = await fetchApi(`/api/iocs/${id}/threat-actors`);
+          setThreatActors(actors ?? []);
+        } catch { /* threat actor fetch is non-critical */ }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("404") || msg.toLowerCase().includes("not found")) {
@@ -470,6 +483,64 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
                 >
                   {JSON.stringify(data.metadata, null, 2)}
                 </pre>
+              </div>
+            </div>
+          )}
+          {/* Linked Threat Actors */}
+          {threatActors.length > 0 && (
+            <div
+              className="rounded-lg border overflow-hidden"
+              style={{ background: "var(--card)", borderColor: "var(--border)" }}
+            >
+              <div
+                className="flex items-center gap-2 px-4 py-3 border-b"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <Users className="w-4 h-4" style={{ color: "var(--primary)" }} />
+                <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+                  Linked Threat Actors
+                </h2>
+                <span
+                  className="ml-auto text-[10px] px-1.5 py-0.5 rounded tabular-nums"
+                  style={{ background: "var(--muted)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+                >
+                  {threatActors.length}
+                </span>
+              </div>
+              <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+                {threatActors.map((actor) => (
+                  <Link
+                    key={actor.id}
+                    href={`/threat-actors/${actor.id}`}
+                    className="flex items-center gap-3 px-4 py-3 transition-all"
+                    style={{ display: "flex" }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = "rgba(56,189,248,0.04)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLElement).style.background = "";
+                    }}
+                  >
+                    <span
+                      className="font-mono text-[10px] px-1.5 py-0.5 rounded flex-shrink-0"
+                      style={{ background: "rgba(56,189,248,0.08)", color: "var(--primary)", border: "1px solid rgba(56,189,248,0.2)" }}
+                    >
+                      {actor.mitre_id}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>{actor.name}</span>
+                      {actor.country && (
+                        <span className="ml-2 text-[10px]" style={{ color: "var(--muted-foreground)" }}>· {actor.country}</span>
+                      )}
+                    </div>
+                    {actor.confidence != null && (
+                      <span className="text-[9px] font-mono" style={{ color: "var(--muted-foreground)" }}>
+                        {(actor.confidence * 100).toFixed(0)}% confidence
+                      </span>
+                    )}
+                    <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ color: "var(--muted-foreground)" }} />
+                  </Link>
+                ))}
               </div>
             </div>
           )}
