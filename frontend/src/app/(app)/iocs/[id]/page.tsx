@@ -6,7 +6,7 @@ import { getSeverity, formatDate, formatDateTime } from "@/lib/utils";
 import {
   ArrowLeft, Network, ShieldAlert, Tag, MessageSquare,
   Clock, X, Edit3, Trash2, Save, Bookmark, BookmarkCheck,
-  Layers, AlertTriangle, ChevronRight, Users,
+  Layers, AlertTriangle, ChevronRight, Users, Zap, ExternalLink, Loader2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -72,6 +72,103 @@ const TYPE_COLORS: Record<string, string> = {
 
 const PREDEFINED_TAGS = ["confirmed", "false-positive", "watching", "investigating", "resolved", "c2", "phishing"];
 
+/* ─── Enrichment display ─────────────────────────────────────────────────── */
+function EnrichmentDisplay({ enrichment }: { enrichment: Record<string, unknown> | undefined }) {
+  if (!enrichment) return null;
+  const e = enrichment;
+  if (e.type === "geoip") {
+    const fields: [string, unknown][] = [
+      ["Country", e.country], ["Region", e.regionName], ["City", e.city],
+      ["ISP", e.isp], ["Org", e.org], ["AS", e.as],
+    ];
+    return (
+      <>
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          {fields.map(([label, val]) => val ? (
+            <div key={label as string}>
+              <div className="text-[9px] uppercase tracking-wider mb-0.5" style={{ color: "var(--muted-foreground)" }}>{label as string}</div>
+              <div style={{ color: "var(--foreground)" }}>{String(val)}</div>
+            </div>
+          ) : null)}
+        </div>
+        <p className="text-[9px] mt-3" style={{ color: "var(--muted-foreground)" }}>
+          Enriched {(e.enriched_at as string)?.slice(0, 10)}
+        </p>
+      </>
+    );
+  }
+  if (e.type === "dns") {
+    const aRecords = (e.A as string[]) ?? [];
+    const mxRecords = (e.MX as string[]) ?? [];
+    return (
+      <>
+        <div className="space-y-3 text-xs">
+          <div>
+            <div className="text-[9px] uppercase tracking-wider mb-1" style={{ color: "var(--muted-foreground)" }}>A Records</div>
+            {aRecords.length > 0 ? aRecords.map((r, i) => (
+              <div key={i} className="font-mono" style={{ color: "var(--primary)" }}>{r}</div>
+            )) : <span style={{ color: "var(--muted-foreground)" }}>None</span>}
+          </div>
+          {mxRecords.length > 0 && (
+            <div>
+              <div className="text-[9px] uppercase tracking-wider mb-1" style={{ color: "var(--muted-foreground)" }}>MX Records</div>
+              {mxRecords.map((r, i) => (
+                <div key={i} className="font-mono" style={{ color: "var(--foreground)" }}>{r}</div>
+              ))}
+            </div>
+          )}
+        </div>
+        <p className="text-[9px] mt-3" style={{ color: "var(--muted-foreground)" }}>
+          Enriched {(e.enriched_at as string)?.slice(0, 10)}
+        </p>
+      </>
+    );
+  }
+  if (e.type === "hash_link") {
+    return (
+      <>
+        <a
+          href={e.virustotal_url as string}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs"
+          style={{ color: "#c084fc" }}
+        >
+          <ExternalLink className="w-3 h-3" />
+          View on VirusTotal
+        </a>
+        <p className="text-[9px] mt-2" style={{ color: "var(--muted-foreground)" }}>
+          Enriched {(e.enriched_at as string)?.slice(0, 10)}
+        </p>
+      </>
+    );
+  }
+  if (e.type === "url_link") {
+    return (
+      <>
+        <a
+          href={e.urlhaus_url as string}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-xs"
+          style={{ color: "#c084fc" }}
+        >
+          <ExternalLink className="w-3 h-3" />
+          View on URLhaus
+        </a>
+        <p className="text-[9px] mt-2" style={{ color: "var(--muted-foreground)" }}>
+          Enriched {(e.enriched_at as string)?.slice(0, 10)}
+        </p>
+      </>
+    );
+  }
+  return (
+    <pre className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+      {JSON.stringify(e, null, 2)}
+    </pre>
+  );
+}
+
 /* ─── Main page ─────────────────────────────────────────────────────────── */
 // Next.js 14: params is a plain object (not a Promise)
 export default function IOCDetailPage({ params }: { params: { id: string } }) {
@@ -89,6 +186,10 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
   const [newNote, setNewNote] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState("");
+
+  // Enrichment
+  const [enriching, setEnriching] = useState(false);
+  const [enrichError, setEnrichError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -180,6 +281,60 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
     try {
       await fetchApi(`/api/iocs/${id}/notes/${noteId}`, { method: "DELETE" });
     } catch { /* optimistic */ }
+  };
+
+  /* ── Enrichment ─────────────────────────────────────────────────────────── */
+  const runEnrich = async () => {
+    if (!data) return;
+    setEnriching(true);
+    setEnrichError(null);
+    try {
+      let enrichment: Record<string, unknown> = {};
+      const iocType = data.type;
+      const value = data.value;
+
+      if (iocType === "ipv4" || iocType === "ip") {
+        // ip-api.com — free, CORS-enabled
+        const res = await fetch(`http://ip-api.com/json/${encodeURIComponent(value)}?fields=status,country,regionName,city,isp,org,as,query`);
+        const geo = await res.json();
+        enrichment = { type: "geoip", ...geo, enriched_at: new Date().toISOString() };
+      } else if (iocType === "domain") {
+        // Google Public DNS-over-HTTPS
+        const [aRes, mxRes] = await Promise.all([
+          fetch(`https://dns.google/resolve?name=${encodeURIComponent(value)}&type=A`).then(r => r.json()),
+          fetch(`https://dns.google/resolve?name=${encodeURIComponent(value)}&type=MX`).then(r => r.json()).catch(() => null),
+        ]);
+        enrichment = {
+          type: "dns",
+          A: aRes?.Answer?.map((r: { data: string }) => r.data) ?? [],
+          MX: mxRes?.Answer?.map((r: { data: string }) => r.data) ?? [],
+          enriched_at: new Date().toISOString(),
+        };
+      } else if (iocType.startsWith("hash")) {
+        enrichment = {
+          type: "hash_link",
+          virustotal_url: `https://www.virustotal.com/gui/file/${value}`,
+          enriched_at: new Date().toISOString(),
+        };
+      } else if (iocType === "url") {
+        enrichment = {
+          type: "url_link",
+          urlhaus_url: `https://urlhaus.abuse.ch/url/${encodeURIComponent(value)}`,
+          enriched_at: new Date().toISOString(),
+        };
+      }
+
+      // Merge into metadata via backend
+      const updated = await fetchApi(`/api/iocs/${id}/metadata`, {
+        method: "PATCH",
+        body: JSON.stringify({ enrichment }),
+      });
+      setData({ ...data, metadata: updated });
+    } catch (e) {
+      setEnrichError(e instanceof Error ? e.message : "Enrichment failed");
+    } finally {
+      setEnriching(false);
+    }
   };
 
   /* ── States ─────────────────────────────────────────────────────────────── */
@@ -326,6 +481,19 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
               >
                 {isWatched ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
                 {isWatched ? "Watching" : "Watch"}
+              </button>
+              <button
+                onClick={runEnrich}
+                disabled={enriching}
+                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all disabled:opacity-50"
+                style={{
+                  background: "rgba(168,85,247,0.08)",
+                  border: "1px solid rgba(168,85,247,0.25)",
+                  color: "#c084fc",
+                }}
+              >
+                {enriching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                Enrich
               </button>
               <Link
                 href={`/iocs/${id}/graph`}
@@ -487,6 +655,36 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
               </div>
             </div>
           )}
+          {/* Enrichment card */}
+          {(data.metadata?.enrichment || enrichError) && (
+            <div
+              className="rounded-lg border overflow-hidden"
+              style={{ background: "var(--card)", borderColor: "rgba(168,85,247,0.25)" }}
+            >
+              <div
+                className="flex items-center gap-2 px-4 py-3 border-b"
+                style={{ borderColor: "var(--border)" }}
+              >
+                <Zap className="w-4 h-4" style={{ color: "#c084fc" }} />
+                <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+                  Enrichment
+                </h2>
+                <span
+                  className="ml-auto text-[10px] px-1.5 py-0.5 rounded"
+                  style={{ background: "rgba(168,85,247,0.08)", color: "#c084fc", border: "1px solid rgba(168,85,247,0.2)" }}
+                >
+                  {(data.metadata?.enrichment as Record<string, unknown>)?.type as string ?? "live"}
+                </span>
+              </div>
+              <div className="p-4">
+                {enrichError && (
+                  <p className="text-xs" style={{ color: "#f87171" }}>{enrichError}</p>
+                )}
+                <EnrichmentDisplay enrichment={data.metadata?.enrichment as Record<string, unknown> | undefined} />
+              </div>
+            </div>
+          )}
+
           {/* Linked Threat Actors */}
           {threatActors.length > 0 && (
             <div

@@ -293,6 +293,51 @@ async def search_iocs(
 
 
 # ---------------------------------------------------------------------------
+# POST /api/iocs/bulk-lookup — batch exact-value lookup
+# ---------------------------------------------------------------------------
+
+
+@router.post("/bulk-lookup", response_model=list[dict])
+async def bulk_lookup_iocs(
+    payload: dict,
+    current_user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict]:
+    """Exact-match lookup for up to 100 IOC values.
+
+    Request body: ``{"values": ["1.2.3.4", "evil.com", ...]}``
+    Returns one result object per input value (found or not).
+    """
+    values: list[str] = payload.get("values", [])
+    if not values or len(values) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Provide between 1 and 100 values.",
+        )
+
+    rows = (
+        await session.execute(
+            select(IOCModel).where(IOCModel.value.in_(values))
+        )
+    ).scalars().all()
+
+    found_map = {ioc.value: ioc for ioc in rows}
+
+    return [
+        {
+            "value": v,
+            "found": v in found_map,
+            "id": str(found_map[v].id) if v in found_map else None,
+            "type": found_map[v].type if v in found_map else None,
+            "severity": float(found_map[v].severity) if v in found_map and found_map[v].severity is not None else None,
+            "source_count": found_map[v].source_count if v in found_map else None,
+            "last_seen": found_map[v].last_seen.isoformat() if v in found_map else None,
+        }
+        for v in values
+    ]
+
+
+# ---------------------------------------------------------------------------
 # GET /api/iocs/{ioc_id} — full detail
 # ---------------------------------------------------------------------------
 
@@ -354,6 +399,33 @@ async def get_ioc(
         tags=[TagResponse.model_validate(t) for t in tags],
         notes=[NoteResponse.model_validate(n) for n in notes],
     )
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/iocs/{ioc_id}/metadata — merge enrichment data into metadata
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/{ioc_id}/metadata", response_model=dict)
+async def patch_ioc_metadata(
+    ioc_id: uuid.UUID,
+    payload: dict,
+    current_user: CurrentUser,
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Merge ``payload`` into the IOC's metadata JSON field (shallow merge)."""
+    ioc_result = await session.execute(
+        select(IOCModel).where(IOCModel.id == ioc_id)
+    )
+    ioc = ioc_result.scalar_one_or_none()
+    if ioc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IOC not found.")
+
+    existing = dict(ioc.metadata_ or {})
+    existing.update(payload)
+    ioc.metadata_ = existing
+    await session.commit()
+    return existing
 
 
 # ---------------------------------------------------------------------------
