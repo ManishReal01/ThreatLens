@@ -192,7 +192,7 @@ function SearchContent() {
 
       {/* Filter bar */}
       <div
-        className="rounded-lg border p-3"
+        className="rounded-lg border border-slate-700/50 p-3"
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
       >
         <div className="flex flex-wrap items-center gap-2">
@@ -278,7 +278,7 @@ function SearchContent() {
 
       {/* Results table */}
       <div
-        className="rounded-lg border overflow-hidden"
+        className="rounded-lg border border-slate-700/50 overflow-hidden"
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
       >
         {/* Table meta */}
@@ -333,7 +333,7 @@ function SearchContent() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr style={{ borderBottom: `1px solid var(--border)` }}>
+                <tr className="border-b border-slate-700" style={{ borderBottom: `1px solid var(--border)` }}>
                   {["Indicator", "Type", "Score", "Severity", "Sources", "Last Seen"].map((h) => (
                     <th
                       key={h}
@@ -351,7 +351,7 @@ function SearchContent() {
                   return (
                     <tr
                       key={ioc.id}
-                      className="group transition-colors cursor-pointer"
+                      className="group transition-colors cursor-pointer border-b border-slate-800/50"
                       style={{
                         borderBottom: i < results.items.length - 1 ? `1px solid var(--border)` : undefined,
                       }}

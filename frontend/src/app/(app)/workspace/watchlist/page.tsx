@@ -168,7 +168,7 @@ export default function WatchlistPage() {
 
       {/* Table */}
       <div
-        className="rounded-lg border overflow-hidden"
+        className="rounded-lg border border-slate-700/50 overflow-hidden"
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
       >
         {/* Error */}
@@ -221,7 +221,7 @@ export default function WatchlistPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr style={{ borderBottom: `1px solid var(--border)` }}>
+                <tr className="border-b border-slate-700" style={{ borderBottom: `1px solid var(--border)` }}>
                   {["Indicator", "Type", "Score", "Severity", "Tags", "Last Seen", ""].map((h) => (
                     <th
                       key={h}
@@ -239,7 +239,7 @@ export default function WatchlistPage() {
                   return (
                     <tr
                       key={ioc.id}
-                      className="group transition-colors"
+                      className="group transition-colors border-b border-slate-800/50"
                       style={{
                         borderBottom: i < data.length - 1 ? `1px solid var(--border)` : undefined,
                       }}

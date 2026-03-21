@@ -195,7 +195,7 @@ export default function DashboardPage() {
             return (
               <div
                 key={feed.feed_name}
-                className="rounded-lg border p-4 space-y-3 relative overflow-hidden"
+                className="rounded-lg border border-slate-700/50 p-4 space-y-3 relative overflow-hidden"
                 style={{
                   background: ok ? "var(--card)" : "rgba(239,68,68,0.04)",
                   borderColor: ok ? "var(--border)" : "rgba(239,68,68,0.25)",
@@ -259,7 +259,7 @@ export default function DashboardPage() {
           ].map(({ label, value, icon: Icon, color, bg }) => (
             <div
               key={label}
-              className="rounded-lg border p-3 flex items-center gap-3"
+              className="rounded-lg border border-slate-700/50 p-3 flex items-center gap-3"
               style={{ background: bg, borderColor: `${color}30` }}
             >
               <div
@@ -283,7 +283,7 @@ export default function DashboardPage() {
 
       {/* ── Recent high-severity IOCs table ───────────────────────────── */}
       <div
-        className="rounded-lg border overflow-hidden"
+        className="rounded-lg border border-slate-700/50 overflow-hidden"
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
       >
         <div
@@ -319,7 +319,7 @@ export default function DashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr style={{ borderBottom: `1px solid var(--border)` }}>
+                <tr className="border-b border-slate-700" style={{ borderBottom: `1px solid var(--border)` }}>
                   {["Indicator", "Type", "Score", "Severity", "Sources", "Last Seen"].map((h) => (
                     <th
                       key={h}
@@ -337,7 +337,7 @@ export default function DashboardPage() {
                   return (
                     <tr
                       key={ioc.id}
-                      className="group cursor-pointer transition-colors"
+                      className="group cursor-pointer transition-colors border-b border-slate-800/50"
                       style={{
                         borderBottom: i < recentIOCs.length - 1 ? `1px solid var(--border)` : undefined,
                       }}

@@ -21,7 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
       <aside
-        className="w-56 flex-shrink-0 flex flex-col border-r"
+        className="w-56 flex-shrink-0 flex flex-col border-r border-slate-800"
         style={{
           background: "var(--sidebar)",
           borderColor: "var(--sidebar-border)",

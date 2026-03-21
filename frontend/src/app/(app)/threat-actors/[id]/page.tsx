@@ -57,7 +57,7 @@ function Section({ title, icon: Icon, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg p-4" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+    <div className="rounded-lg border border-slate-700/50 p-4" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
       <div className="flex items-center gap-2 mb-3">
         <Icon className="w-3.5 h-3.5" style={{ color: "var(--primary)" }} />
         <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
@@ -350,7 +350,7 @@ export default function ThreatActorDetailPage({ params }: { params: Promise<{ id
         {/* Right column — metadata */}
         <div className="space-y-4">
           {/* Quick facts */}
-          <div className="rounded-lg p-4 space-y-3" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+          <div className="rounded-lg border border-slate-700/50 p-4 space-y-3" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
             <span className="text-[9px] uppercase tracking-[0.15em] font-semibold" style={{ color: "var(--muted-foreground)" }}>
               Quick Facts
             </span>
@@ -412,7 +412,7 @@ export default function ThreatActorDetailPage({ params }: { params: Promise<{ id
 
           {/* Associated malware */}
           {actor.associated_malware.length > 0 && (
-            <div className="rounded-lg p-4" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
+            <div className="rounded-lg border border-slate-700/50 p-4" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
               <span className="text-[9px] uppercase tracking-[0.15em] font-semibold" style={{ color: "var(--muted-foreground)" }}>
                 Associated Malware
               </span>
@@ -436,7 +436,7 @@ export default function ThreatActorDetailPage({ params }: { params: Promise<{ id
               href={mitreUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-2.5 rounded text-xs transition-all w-full"
+              className="flex items-center gap-2 px-3 py-2.5 rounded border border-slate-700/50 text-xs transition-all w-full"
               style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLElement).style.borderColor = "rgba(56,189,248,0.3)";

@@ -254,7 +254,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
 
       {/* ── IOC Header ─────────────────────────────────────────────────── */}
       <div
-        className="rounded-lg border p-4 relative overflow-hidden"
+        className="rounded-lg border border-slate-700/50 p-4 relative overflow-hidden"
         style={{ background: "var(--card)", borderColor: "var(--border)" }}
       >
         <div className="absolute inset-0 bg-grid-ops opacity-30 pointer-events-none" />
@@ -353,7 +353,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
           {/* Score explanation */}
           {data.score_explanation && Object.keys(data.score_explanation).length > 0 && (
             <div
-              className="rounded-lg border overflow-hidden"
+              className="rounded-lg border border-slate-700/50 overflow-hidden"
               style={{ background: "var(--card)", borderColor: "var(--border)" }}
             >
               <div
@@ -382,7 +382,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
 
           {/* Feed Observations */}
           <div
-            className="rounded-lg border overflow-hidden"
+            className="rounded-lg border border-slate-700/50 overflow-hidden"
             style={{ background: "var(--card)", borderColor: "var(--border)" }}
           >
             <div
@@ -410,7 +410,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
             ) : (
               <table className="w-full text-xs">
                 <thead>
-                  <tr style={{ borderBottom: `1px solid var(--border)` }}>
+                  <tr className="border-b border-slate-700" style={{ borderBottom: `1px solid var(--border)` }}>
                     {["Source Feed", "Confidence", "Ingested At", "Raw Score"].map((h) => (
                       <th
                         key={h}
@@ -426,6 +426,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
                   {data.sources.map((src, i) => (
                     <tr
                       key={src.id}
+                      className="border-b border-slate-800/50"
                       style={{ borderBottom: i < data.sources.length - 1 ? `1px solid var(--border)` : undefined }}
                     >
                       <td className="px-4 py-2.5 font-semibold font-heading" style={{ color: "var(--foreground)" }}>
@@ -467,7 +468,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
           {/* Metadata */}
           {data.metadata && Object.keys(data.metadata).length > 0 && (
             <div
-              className="rounded-lg border overflow-hidden"
+              className="rounded-lg border border-slate-700/50 overflow-hidden"
               style={{ background: "var(--card)", borderColor: "var(--border)" }}
             >
               <div
@@ -489,7 +490,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
           {/* Linked Threat Actors */}
           {threatActors.length > 0 && (
             <div
-              className="rounded-lg border overflow-hidden"
+              className="rounded-lg border border-slate-700/50 overflow-hidden"
               style={{ background: "var(--card)", borderColor: "var(--border)" }}
             >
               <div
@@ -551,7 +552,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
 
           {/* Tags */}
           <div
-            className="rounded-lg border overflow-hidden"
+            className="rounded-lg border border-slate-700/50 overflow-hidden"
             style={{ background: "var(--card)", borderColor: "var(--border)" }}
           >
             <div
@@ -646,7 +647,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
 
           {/* Notes */}
           <div
-            className="rounded-lg border overflow-hidden"
+            className="rounded-lg border border-slate-700/50 overflow-hidden"
             style={{ background: "var(--card)", borderColor: "var(--border)" }}
           >
             <div
