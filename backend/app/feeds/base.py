@@ -116,7 +116,14 @@ class BaseFeedWorker(ABC):
         # Disable per-statement timeout for the duration of this feed run.
         # Supabase sets a default statement_timeout that kills long bulk upserts.
         # SET (session-level) persists across commits unlike SET LOCAL.
-        await session.execute(text("SET statement_timeout = 0"))
+        # SQLite does not support this command, so only run it on PostgreSQL.
+        try:
+            bind = session.bind or session.sync_session.bind  # type: ignore[union-attr]
+            dialect = bind.dialect.name if bind is not None else "unknown"
+        except Exception:
+            dialect = "unknown"
+        if dialect == "postgresql":
+            await session.execute(text("SET statement_timeout = 0"))
 
         feed_run = FeedRunModel(feed_name=self.FEED_NAME, status="running")
         session.add(feed_run)

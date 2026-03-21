@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/feeds", tags=["feeds"])
 
-_KNOWN_FEEDS: tuple[str, ...] = ("abuseipdb", "urlhaus", "otx")
+_KNOWN_FEEDS: tuple[str, ...] = ("abuseipdb", "urlhaus", "otx", "threatfox")
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +132,10 @@ async def _run_feed_worker(feed_name: str) -> None:
             from app.feeds.urlhaus import URLhausWorker
 
             worker_cls = URLhausWorker
+        elif feed_name == "threatfox":
+            from app.feeds.threatfox import ThreatFoxWorker
+
+            worker_cls = ThreatFoxWorker
         else:
             from app.feeds.otx import OTXWorker
 

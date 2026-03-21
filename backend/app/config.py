@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # Subsequent delta runs are uncapped — they only pull recently-modified pulses.
     otx_max_pages_first_run: int = 1
 
+    # ThreatFox: same abuse.ch Auth-Key as URLhaus; 6-hour polling interval
+    threatfox_schedule_minutes: int = 360
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
