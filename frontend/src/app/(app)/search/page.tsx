@@ -244,7 +244,7 @@ function SearchContent() {
             }}
           >
             <option value="">All Severities</option>
-            <option value="critical">Critical (≥9.0)</option>
+            <option value="critical">Critical (≥8.5)</option>
             <option value="high">High (7.0–8.9)</option>
             <option value="medium">Medium (4.0–6.9)</option>
             <option value="low">Low (&lt;4.0)</option>

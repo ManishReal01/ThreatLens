@@ -70,8 +70,8 @@ async def get_stats(
     # Single pass: count each severity band with CASE/SUM to avoid 4 queries.
     band_result = await session.execute(
         select(
-            func.sum(sa.case((IOCModel.severity >= 9, 1), else_=0)).label("critical"),
-            func.sum(sa.case((sa.and_(IOCModel.severity >= 7, IOCModel.severity < 9), 1), else_=0)).label("high"),
+            func.sum(sa.case((IOCModel.severity >= 8.5, 1), else_=0)).label("critical"),
+            func.sum(sa.case((sa.and_(IOCModel.severity >= 7, IOCModel.severity < 8.5), 1), else_=0)).label("high"),
             func.sum(sa.case((sa.and_(IOCModel.severity >= 4, IOCModel.severity < 7), 1), else_=0)).label("medium"),
             func.sum(sa.case((IOCModel.severity < 4, 1), else_=0)).label("low"),
         )

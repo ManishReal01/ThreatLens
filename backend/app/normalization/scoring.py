@@ -3,10 +3,10 @@ import math
 
 from pydantic import BaseModel
 
-FEED_CONFIDENCE_WEIGHT: float = 0.40
-SOURCE_COUNT_WEIGHT: float = 0.35
+FEED_CONFIDENCE_WEIGHT: float = 0.50
+SOURCE_COUNT_WEIGHT: float = 0.25
 RECENCY_WEIGHT: float = 0.25
-CURRENT_SCORE_VERSION: int = 1
+CURRENT_SCORE_VERSION: int = 2
 
 
 class SeverityResult(BaseModel):
@@ -22,8 +22,8 @@ def compute_severity(
     """Compute severity score in [0.0, 10.0] with exponential recency decay.
 
     Formula:
-        confidence_component  = raw_confidence * 10 * 0.40
-        source_count_component = min(log2(source_count+1)/log2(11), 1.0) * 10 * 0.35
+        confidence_component  = raw_confidence * 10 * 0.50
+        source_count_component = min(log2(source_count+1)/log2(11), 1.0) * 10 * 0.25
         recency_component      = exp(-0.008 * age_days) * 10 * 0.25
         score                  = sum of components, rounded to 2 dp
     """

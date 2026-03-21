@@ -76,8 +76,19 @@ _OTX_TYPE_MAP: dict[str, IOCType] = {
     "FileHash-SHA256": IOCType.hash_sha256,
 }
 
-# OTX does not provide per-indicator confidence scores on the free API
-_DEFAULT_CONFIDENCE = 0.7
+# OTX free API has no per-indicator confidence; use type-based priors.
+# Hashes are deterministic evidence; IPs/domains carry more uncertainty.
+_TYPE_CONFIDENCE: dict[str, float] = {
+    "FileHash-SHA256": 0.85,
+    "FileHash-SHA1":   0.80,
+    "FileHash-MD5":    0.75,
+    "URL":             0.75,
+    "IPv4":            0.70,
+    "IPv6":            0.70,
+    "domain":          0.65,
+    "hostname":        0.65,
+}
+_DEFAULT_CONFIDENCE = 0.65
 
 
 class OTXWorker(BaseFeedWorker):
@@ -237,7 +248,7 @@ def _map_indicator(
     return NormalizedIOC(
         value=value,
         ioc_type=ioc_type,
-        raw_confidence=_DEFAULT_CONFIDENCE,
+        raw_confidence=_TYPE_CONFIDENCE.get(otx_type, _DEFAULT_CONFIDENCE),
         feed_name="otx",
         feed_run_id=feed_run_id,
         raw_payload=indicator,

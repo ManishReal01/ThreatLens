@@ -160,5 +160,5 @@ class TriggerResponse(BaseModel):
 class StatsResponse(BaseModel):
     total_iocs: int
     iocs_by_type: dict[str, int]
-    # Severity bands: critical (>=9), high (7–8.99), medium (4–6.99), low (<4)
+    # Severity bands: critical (>=8.5), high (7–8.49), medium (4–6.99), low (<4)
     iocs_by_severity: dict[str, int]
