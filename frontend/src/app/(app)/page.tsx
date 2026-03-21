@@ -77,18 +77,9 @@ const FEED_DISPLAY: Record<string, { label: string; short: string }> = {
 };
 
 /* ─── IOC type badge ─────────────────────────────────────────────────────── */
-const TYPE_COLORS: Record<string, string> = {
-  ipv4:        "bg-sky-500/10 text-sky-400 border-sky-500/20",
-  domain:      "bg-violet-500/10 text-violet-400 border-violet-500/20",
-  url:         "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  hash_md5:    "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  hash_sha1:   "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  hash_sha256: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-};
 function TypeBadge({ type }: { type: string }) {
-  const cls = TYPE_COLORS[type] ?? "bg-muted/20 text-muted-foreground border-muted/30";
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border ${cls}`}>
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider bg-cyan-950/50 text-cyan-300 ring-1 ring-cyan-500/20">
       {type.replace("hash_", "")}
     </span>
   );
@@ -97,8 +88,14 @@ function TypeBadge({ type }: { type: string }) {
 /* ─── Severity badge ────────────────────────────────────────────────────── */
 function SevBadge({ score }: { score: number | null | undefined }) {
   const sev = getSeverity(score);
+  const ringCls =
+    sev.label === "Critical" ? "ring-red-500/30 bg-red-950/40 text-red-400" :
+    sev.label === "High"     ? "ring-orange-500/30 bg-orange-950/40 text-orange-400" :
+    sev.label === "Medium"   ? "ring-amber-500/30 bg-amber-950/40 text-amber-400" :
+    sev.label === "Low"      ? "ring-blue-500/30 bg-blue-950/40 text-blue-400" :
+                               "ring-slate-500/30 bg-slate-800/40 text-slate-400";
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-semibold border ${sev.cls}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-semibold ring-1 ${ringCls}`}>
       <span className={`w-1 h-1 rounded-full ${sev.dotCls}`} />
       {sev.label}
     </span>
@@ -157,10 +154,7 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div
-          className="flex items-center gap-3 px-5 py-4 rounded-lg border text-sm"
-          style={{ background: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)", color: "#f87171" }}
-        >
+        <div className="flex items-center gap-3 px-5 py-4 rounded-lg border text-sm bg-red-950/20 border-red-800/40 text-red-400">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
@@ -171,62 +165,52 @@ export default function DashboardPage() {
   /* ── Loading skeleton ────────────────────────────────────────────────── */
   if (loading) {
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div className="flex items-center justify-between">
           <Skeleton className="h-7 w-48" />
           <Skeleton className="h-8 w-28" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-28" />)}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-20" />)}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16" />)}
         </div>
-        <Skeleton className="h-72" />
+        <Skeleton className="h-64" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 animate-in fade-in duration-400">
+    <div className="space-y-4 animate-in fade-in duration-400">
 
-      {/* ── Page header ───────────────────────────────────────────────── */}
+      {/* ── Page header + alert ticker ─────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold font-heading tracking-tight" style={{ color: "var(--foreground)" }}>
+          <h1 className="text-2xl font-bold font-heading tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
             System Overview
           </h1>
-          <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+          <p className="text-xs mt-0.5 text-slate-500">
             Real-time ingest pipeline &amp; threat telemetry
           </p>
           <button
             onClick={() => handleSync("otx")}
             disabled={syncing}
-            className="mt-3 flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-all disabled:opacity-50"
-            style={{
-              background: "rgba(56,189,248,0.10)",
-              border: "1px solid rgba(56,189,248,0.25)",
-              color: "var(--primary)",
-            }}
+            className="mt-2.5 flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all disabled:opacity-50 bg-cyan-600 hover:bg-cyan-500 text-white"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`} />
             Trigger Sync
           </button>
         </div>
-
-        {/* Live alert ticker */}
         <div className="flex-shrink-0">
           <AlertTicker />
         </div>
       </div>
 
-      {/* ── Feed health cards ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* ── Feed health row ────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         {feeds.length === 0 ? (
-          <div
-            className="col-span-3 flex items-center justify-center h-24 rounded-lg border text-xs"
-            style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-          >
+          <div className="col-span-3 flex items-center justify-center h-16 rounded-lg border border-slate-800 text-xs text-slate-500">
             No feed data available.
           </div>
         ) : (
@@ -236,52 +220,39 @@ export default function DashboardPage() {
             return (
               <div
                 key={feed.feed_name}
-                className="rounded-lg border border-slate-700/50 p-4 space-y-3 relative overflow-hidden"
-                style={{
-                  background: ok ? "var(--card)" : "rgba(239,68,68,0.04)",
-                  borderColor: ok ? "var(--border)" : "rgba(239,68,68,0.25)",
-                }}
+                className="bg-slate-900/40 backdrop-blur-sm rounded-lg border overflow-hidden relative"
+                style={{ borderColor: ok ? "rgba(148,163,184,0.1)" : "rgba(239,68,68,0.2)" }}
               >
-                {/* subtle grid bg */}
-                <div className="absolute inset-0 bg-grid-ops opacity-30 pointer-events-none" />
-
-                <div className="relative flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`w-2 h-2 rounded-full flex-shrink-0 ${ok ? "bg-[#22c55e] status-pulse" : "bg-[#ef4444]"}`}
-                    />
-                    <span className="text-xs font-semibold font-heading uppercase tracking-wider" style={{ color: "var(--foreground)" }}>
-                      {display.label}
-                    </span>
-                  </div>
-                  {ok ? (
-                    <Activity className="w-3.5 h-3.5" style={{ color: "#4ade80" }} />
-                  ) : (
-                    <ServerCrash className="w-3.5 h-3.5" style={{ color: "#f87171" }} />
-                  )}
-                </div>
-
-                <div className="relative">
-                  <div
-                    className="text-2xl font-bold font-heading tabular-nums"
-                    style={{ color: ok ? "var(--foreground)" : "#f87171" }}
-                  >
-                    {ok ? feed.total_iocs.toLocaleString() : "Error"}
-                  </div>
-                  <div className="text-[10px] mt-0.5 space-y-0.5" style={{ color: "var(--muted-foreground)" }}>
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-2.5 h-2.5" />
-                      {formatRelativeTime(feed.last_run_at)}
+                <div className="absolute inset-0 bg-grid-ops opacity-20 pointer-events-none" />
+                <div className="relative flex items-center gap-3 px-3 py-2.5">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ok ? "bg-emerald-500 status-pulse" : "bg-red-500"}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold font-heading uppercase tracking-wider text-slate-200">
+                        {display.label}
+                      </span>
+                      <span className="text-sm font-bold font-heading tabular-nums text-slate-100">
+                        {ok ? feed.total_iocs.toLocaleString() : <span className="text-red-400 text-xs">Error</span>}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-1 text-[9px] text-slate-500">
+                        <Clock className="w-2.5 h-2.5" />
+                        {formatRelativeTime(feed.last_run_at)}
+                      </div>
                       {feed.last_iocs_fetched != null && ok && (
-                        <span className="ml-1">· +{(feed.last_iocs_new ?? 0).toLocaleString()} new</span>
+                        <span className="text-[9px] text-emerald-500">+{(feed.last_iocs_new ?? 0).toLocaleString()} new</span>
+                      )}
+                      {feed.last_error_msg && (
+                        <span className="text-[9px] text-red-400 truncate" title={feed.last_error_msg}>{feed.last_error_msg}</span>
                       )}
                     </div>
-                    {feed.last_error_msg && (
-                      <div className="truncate text-[#f87171]" title={feed.last_error_msg}>
-                        {feed.last_error_msg}
-                      </div>
-                    )}
                   </div>
+                  {ok ? (
+                    <Activity className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
+                  ) : (
+                    <ServerCrash className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
+                  )}
                 </div>
               </div>
             );
@@ -289,150 +260,111 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ── Stats strip ───────────────────────────────────────────────── */}
+      {/* ── Stats strip ────────────────────────────────────────────────── */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {[
-            { label: "Total IOCs", value: stats.total_iocs,                        icon: Database,      color: "var(--primary)", bg: "rgba(56,189,248,0.08)"  },
-            { label: "Critical",   value: stats.iocs_by_severity.critical ?? 0,    icon: AlertTriangle, color: "#f87171",        bg: "rgba(239,68,68,0.08)"   },
-            { label: "High",       value: stats.iocs_by_severity.high ?? 0,        icon: Zap,           color: "#fb923c",        bg: "rgba(249,115,22,0.08)"  },
-            { label: "Medium",     value: stats.iocs_by_severity.medium ?? 0,      icon: Shield,        color: "#4ade80",        bg: "rgba(34,197,94,0.08)"   },
-          ].map(({ label, value, icon: Icon, color, bg }) => (
+            { label: "Total IOCs", value: stats.total_iocs,                     icon: Database,      accent: "#22d3ee", bar: "bg-cyan-500"   },
+            { label: "Critical",   value: stats.iocs_by_severity.critical ?? 0, icon: AlertTriangle, accent: "#f87171", bar: "bg-red-500"    },
+            { label: "High",       value: stats.iocs_by_severity.high ?? 0,     icon: Zap,           accent: "#fb923c", bar: "bg-orange-500" },
+            { label: "Medium",     value: stats.iocs_by_severity.medium ?? 0,   icon: Shield,        accent: "#fbbf24", bar: "bg-amber-500"  },
+          ].map(({ label, value, icon: Icon, accent, bar }) => (
             <div
               key={label}
-              className="rounded-lg border border-slate-700/50 p-3 flex items-center gap-3"
-              style={{ background: bg, borderColor: `${color}30` }}
+              className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 p-3 relative overflow-hidden"
             >
               <div
-                className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
-                style={{ background: `${color}15`, border: `1px solid ${color}30` }}
-              >
-                <Icon className="w-4 h-4" style={{ color }} />
+                className="absolute bottom-0 left-0 h-0.5 rounded-b-lg"
+                style={{ width: "100%", background: `linear-gradient(to right, ${accent}60, transparent)` }}
+              />
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-[9px] uppercase tracking-widest text-slate-500">{label}</span>
+                <Icon className="w-3 h-3 flex-shrink-0" style={{ color: accent }} />
               </div>
-              <div>
-                <div className="text-xl font-bold font-heading tabular-nums leading-none" style={{ color: "var(--foreground)" }}>
-                  {value.toLocaleString()}
-                </div>
-                <div className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-                  {label}
-                </div>
+              <div className="text-xl font-bold font-heading tabular-nums text-slate-100">
+                {value.toLocaleString()}
+              </div>
+              <div className="mt-1.5 h-0.5 rounded-full bg-slate-800">
+                <div
+                  className={`h-full rounded-full ${bar}`}
+                  style={{ width: `${Math.min(100, (value / Math.max(stats.total_iocs, 1)) * 100)}%`, opacity: 0.7 }}
+                />
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* ── IOC ingest trend chart ────────────────────────────────────── */}
-      <div
-        className="rounded-lg border border-slate-700/50 overflow-hidden"
-        style={{ background: "var(--card)", borderColor: "var(--border)" }}
-      >
-        <div
-          className="flex items-center justify-between px-4 py-3 border-b"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <div>
-            <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
-              IOC Ingest — Last 7 Days
-            </h2>
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-              Daily new indicators across all feeds
-            </p>
+      {/* ── Trend chart + GeoMap side by side ─────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* IOC ingest trend */}
+        <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/60">
+            <div>
+              <h2 className="text-[11px] font-semibold font-heading text-slate-200">IOC Ingest — Last 7 Days</h2>
+              <p className="text-[9px] mt-0.5 text-slate-500">Daily new indicators</p>
+            </div>
+            <div className="text-right">
+              <div className="text-base font-bold font-heading tabular-nums text-cyan-400">
+                {trends.reduce((s, t) => s + t.count, 0).toLocaleString()}
+              </div>
+              <div className="text-[9px] uppercase tracking-wider text-slate-500">this week</div>
+            </div>
           </div>
-          <div className="text-right">
-            <div className="text-lg font-bold font-heading tabular-nums" style={{ color: "var(--primary)" }}>
-              {trends.reduce((s, t) => s + t.count, 0).toLocaleString()}
-            </div>
-            <div className="text-[9px] uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
-              total this week
-            </div>
+          <div className="px-3 pt-2 pb-1.5">
+            <TrendChart trends={trends} />
           </div>
         </div>
-        <div className="px-4 pt-3 pb-2">
-          <TrendChart trends={trends} />
+
+        {/* GeoIP map */}
+        <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/60">
+            <div>
+              <h2 className="text-[11px] font-semibold font-heading text-slate-200 flex items-center gap-1.5">
+                <MapPin className="w-3 h-3 text-cyan-400" />
+                Threat Origin Map
+              </h2>
+              <p className="text-[9px] mt-0.5 text-slate-500">Top-100 IP IOCs by severity</p>
+            </div>
+          </div>
+          <div className="p-3">
+            <GeoMap points={geoPoints} />
+          </div>
         </div>
       </div>
 
-      {/* ── GeoIP threat map ──────────────────────────────────────────── */}
-      <div
-        className="rounded-lg border border-slate-700/50 overflow-hidden"
-        style={{ background: "var(--card)", borderColor: "var(--border)" }}
-      >
-        <div
-          className="flex items-center justify-between px-4 py-3 border-b"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <div>
-            <h2 className="text-sm font-semibold font-heading flex items-center gap-2" style={{ color: "var(--foreground)" }}>
-              <MapPin className="w-3.5 h-3.5" style={{ color: "var(--primary)" }} />
-              Threat Origin Map
-            </h2>
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-              Top-100 IP IOCs by severity · coordinates cached via ip-api.com
-            </p>
-          </div>
-        </div>
-        <div className="p-4">
-          <GeoMap points={geoPoints} />
-        </div>
-      </div>
-
-      {/* ── Latest Activity feed ──────────────────────────────────────── */}
-      <div
-        className="rounded-lg border border-slate-700/50 overflow-hidden"
-        style={{ background: "var(--card)", borderColor: "var(--border)" }}
-      >
-        <div
-          className="flex items-center justify-between px-4 py-3 border-b"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <div>
-            <h2 className="text-sm font-semibold font-heading flex items-center gap-2" style={{ color: "var(--foreground)" }}>
-              <Radio className="w-3.5 h-3.5" style={{ color: "var(--primary)" }} />
-              Latest Activity
-            </h2>
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-              10 most recent IOC ingestion events across all feeds
-            </p>
-          </div>
+      {/* ── Latest Activity feed ───────────────────────────────────────── */}
+      <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/60">
+          <h2 className="text-[11px] font-semibold font-heading text-slate-200 flex items-center gap-1.5">
+            <Radio className="w-3 h-3 text-cyan-400" />
+            Latest Activity
+          </h2>
+          <span className="text-[9px] text-slate-500">10 most recent IOC ingestion events</span>
         </div>
         {activity.length === 0 ? (
-          <div className="flex items-center justify-center h-24 text-xs" style={{ color: "var(--muted-foreground)" }}>
-            No activity yet.
-          </div>
+          <div className="flex items-center justify-center h-20 text-xs text-slate-500">No activity yet.</div>
         ) : (
-          <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+          <div className="divide-y divide-slate-800/60">
             {activity.map((ev, i) => {
               const sev = getSeverity(ev.severity);
-              const truncated = ev.ioc_value.length > 40 ? ev.ioc_value.slice(0, 40) + "…" : ev.ioc_value;
+              const truncated = ev.ioc_value.length > 45 ? ev.ioc_value.slice(0, 45) + "…" : ev.ioc_value;
               const when = formatRelativeTime(ev.ingested_at);
               return (
                 <Link
                   key={i}
                   href={`/iocs/${ev.ioc_id}`}
-                  className="flex items-center gap-3 px-4 py-2.5 transition-colors group"
-                  style={{ display: "flex" }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(56,189,248,0.04)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = ""; }}
+                  className="flex items-center gap-3 px-4 py-2 transition-colors group hover:bg-cyan-950/30"
                 >
-                  {/* Severity dot */}
                   <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sev.dotCls}`} />
-                  {/* Message */}
-                  <span className="flex-1 text-xs min-w-0">
-                    <span style={{ color: "var(--muted-foreground)" }}>New </span>
-                    <span className={`font-semibold uppercase tracking-wide text-[10px] ${sev.textCls}`}>
-                      {sev.label}
-                    </span>
-                    <span style={{ color: "var(--muted-foreground)" }}> {ev.ioc_type} </span>
-                    <span className="font-mono" style={{ color: "var(--primary)" }}>{truncated}</span>
-                    <span style={{ color: "var(--muted-foreground)" }}> from </span>
-                    <span className="font-medium" style={{ color: "var(--foreground)" }}>{ev.feed_name}</span>
+                  <span className="flex-1 text-[11px] min-w-0 text-slate-400">
+                    <span className={`font-semibold uppercase tracking-wide text-[9px] mr-1 ${sev.textCls}`}>{sev.label}</span>
+                    <span>{ev.ioc_type} </span>
+                    <span className="font-mono text-cyan-300">{truncated}</span>
+                    <span className="text-slate-500"> · {ev.feed_name}</span>
                   </span>
-                  {/* Time */}
-                  <span className="text-[10px] flex-shrink-0 font-mono" style={{ color: "var(--muted-foreground)" }}>
-                    {when}
-                  </span>
-                  <ArrowUpRight className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: "var(--primary)" }} />
+                  <span className="text-[9px] flex-shrink-0 font-mono text-slate-600">{when}</span>
+                  <ArrowUpRight className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-cyan-400" />
                 </Link>
               );
             })}
@@ -441,36 +373,22 @@ export default function DashboardPage() {
       </div>
 
       {/* ── Recent high-severity IOCs table ───────────────────────────── */}
-      <div
-        className="rounded-lg border border-slate-700/50 overflow-hidden"
-        style={{ background: "var(--card)", borderColor: "var(--border)" }}
-      >
-        <div
-          className="flex items-center justify-between px-4 py-3 border-b"
-          style={{ borderColor: "var(--border)" }}
-        >
+      <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/60">
           <div>
-            <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
-              Recent High-Severity Indicators
-            </h2>
-            <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-              Severity ≥ 7.0 · sorted by score
-            </p>
+            <h2 className="text-[11px] font-semibold font-heading text-slate-200">Recent High-Severity Indicators</h2>
+            <p className="text-[9px] mt-0.5 text-slate-500">Severity ≥ 7.0 · sorted by score</p>
           </div>
           <Link
             href="/search?severity_min=7"
-            className="flex items-center gap-1 text-[10px] uppercase tracking-wider px-2 py-1 rounded transition-colors"
-            style={{ color: "var(--primary)", border: "1px solid rgba(56,189,248,0.2)" }}
+            className="flex items-center gap-1 text-[9px] uppercase tracking-wider px-2 py-1 rounded-md text-cyan-400 border border-cyan-800/40 hover:bg-cyan-950/30 transition-colors"
           >
             View All <ArrowUpRight className="w-3 h-3" />
           </Link>
         </div>
 
         {recentIOCs.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center h-36 gap-2 text-xs"
-            style={{ color: "var(--muted-foreground)" }}
-          >
+          <div className="flex flex-col items-center justify-center h-32 gap-2 text-xs text-slate-500">
             <Shield className="w-8 h-8 opacity-20" />
             No high-severity IOCs found.
           </div>
@@ -478,80 +396,44 @@ export default function DashboardPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-slate-700" style={{ borderBottom: `1px solid var(--border)` }}>
+                <tr className="border-b border-slate-800/60">
                   {["Indicator", "Type", "Score", "Severity", "Sources", "Last Seen"].map((h) => (
-                    <th
-                      key={h}
-                      className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
+                    <th key={h} className="text-left px-4 py-2 text-[9px] uppercase tracking-wider font-semibold text-slate-500">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {recentIOCs.map((ioc, i) => {
+                {recentIOCs.map((ioc) => {
                   const sev = getSeverity(ioc.severity);
                   return (
                     <tr
                       key={ioc.id}
-                      className="group cursor-pointer transition-colors border-b border-slate-800/50"
-                      style={{
-                        borderBottom: i < recentIOCs.length - 1 ? `1px solid var(--border)` : undefined,
-                      }}
+                      className="group cursor-pointer transition-colors hover:bg-cyan-950/30 border-b border-slate-800/40 last:border-b-0"
                       onClick={() => (window.location.href = `/iocs/${ioc.id}`)}
                     >
-                      {/* Indicator */}
-                      <td className="px-4 py-2.5">
-                        <span
-                          className="font-mono text-xs font-medium group-hover:underline truncate max-w-[240px] block"
-                          style={{ color: "var(--primary)", fontFamily: "var(--font-mono)" }}
-                        >
+                      <td className="px-4 py-2">
+                        <span className="font-mono text-xs font-medium group-hover:underline truncate max-w-[240px] block text-cyan-300">
                           {ioc.value}
                         </span>
                       </td>
-
-                      {/* Type */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-2">
                         <TypeBadge type={ioc.type} />
                       </td>
-
-                      {/* Score bar */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
-                          <div
-                            className="w-14 h-1.5 rounded-full overflow-hidden flex-shrink-0"
-                            style={{ background: "var(--muted)" }}
-                          >
-                            <div
-                              className={`h-full rounded-full ${sev.barCls}`}
-                              style={{ width: `${((ioc.severity ?? 0) / 10) * 100}%` }}
-                            />
+                          <div className="w-14 h-1 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
+                            <div className={`h-full rounded-full ${sev.barCls}`} style={{ width: `${((ioc.severity ?? 0) / 10) * 100}%` }} />
                           </div>
-                          <span
-                            className="tabular-nums font-mono text-[11px]"
-                            style={{ color: "var(--foreground)" }}
-                          >
-                            {(ioc.severity ?? 0).toFixed(1)}
-                          </span>
+                          <span className="tabular-nums font-mono text-[11px] text-slate-300">{(ioc.severity ?? 0).toFixed(1)}</span>
                         </div>
                       </td>
-
-                      {/* Severity */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-2">
                         <SevBadge score={ioc.severity} />
                       </td>
-
-                      {/* Sources */}
-                      <td className="px-4 py-2.5 tabular-nums" style={{ color: "var(--muted-foreground)" }}>
-                        {ioc.source_count}
-                      </td>
-
-                      {/* Last seen */}
-                      <td className="px-4 py-2.5 font-mono" style={{ color: "var(--muted-foreground)" }}>
-                        {formatDateTime(ioc.last_seen)}
-                      </td>
+                      <td className="px-4 py-2 tabular-nums text-slate-500">{ioc.source_count}</td>
+                      <td className="px-4 py-2 font-mono text-slate-500">{formatDateTime(ioc.last_seen)}</td>
                     </tr>
                   );
                 })}

@@ -42,10 +42,16 @@ interface LookupResult {
 
 /* ─── Severity badge ─────────────────────────────────────────────────────── */
 function SevBadge({ score }: { score: number | null }) {
-  if (score === null) return <span style={{ color: "var(--muted-foreground)" }}>—</span>;
+  if (score === null) return <span className="text-slate-600">—</span>;
   const sev = getSeverity(score);
+  const ringCls =
+    sev.label === "Critical" ? "ring-red-500/30 bg-red-950/40 text-red-400" :
+    sev.label === "High"     ? "ring-orange-500/30 bg-orange-950/40 text-orange-400" :
+    sev.label === "Medium"   ? "ring-amber-500/30 bg-amber-950/40 text-amber-400" :
+    sev.label === "Low"      ? "ring-blue-500/30 bg-blue-950/40 text-blue-400" :
+                               "ring-slate-500/30 bg-slate-800/40 text-slate-400";
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-semibold border ${sev.cls}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-semibold ring-1 ${ringCls}`}>
       <span className={`w-1 h-1 rounded-full ${sev.dotCls}`} />
       {score.toFixed(1)}
     </span>
@@ -53,21 +59,10 @@ function SevBadge({ score }: { score: number | null }) {
 }
 
 /* ─── Type badge ─────────────────────────────────────────────────────────── */
-const TYPE_COLORS: Record<string, string> = {
-  ipv4:        "bg-sky-500/10 text-sky-400 border-sky-500/20",
-  ip:          "bg-sky-500/10 text-sky-400 border-sky-500/20",
-  domain:      "bg-violet-500/10 text-violet-400 border-violet-500/20",
-  url:         "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  hash_md5:    "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  hash_sha1:   "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  hash_sha256: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  unknown:     "bg-slate-500/10 text-slate-400 border-slate-500/20",
-};
 function TypeBadge({ type }: { type: string }) {
-  const cls = TYPE_COLORS[type] ?? TYPE_COLORS.unknown;
   const label = type.replace("hash_", "").replace("ipv4", "ip");
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border ${cls}`}>
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider bg-cyan-950/50 text-cyan-300 ring-1 ring-cyan-500/20">
       {label}
     </span>
   );
@@ -161,22 +156,17 @@ export default function BulkLookupPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-bold font-heading" style={{ color: "var(--foreground)" }}>
+          <h1 className="text-2xl font-bold font-heading tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
             Bulk IOC Lookup
           </h1>
-          <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+          <p className="text-xs mt-0.5 text-slate-500">
             Paste up to 100 IOCs (one per line) — IPs, domains, hashes, and URLs supported
           </p>
         </div>
         {searched && results.length > 0 && (
           <button
             onClick={() => exportCsv(results)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all flex-shrink-0"
-            style={{
-              background: "rgba(56,189,248,0.08)",
-              border: "1px solid rgba(56,189,248,0.25)",
-              color: "var(--primary)",
-            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all flex-shrink-0 bg-cyan-600 hover:bg-cyan-500 text-white"
           >
             <Download className="w-3.5 h-3.5" />
             Export CSV
@@ -185,34 +175,15 @@ export default function BulkLookupPage() {
       </div>
 
       {/* Input area */}
-      <div
-        className="rounded-lg border overflow-hidden"
-        style={{ background: "var(--card)", borderColor: "var(--border)" }}
-      >
-        <div
-          className="flex items-center justify-between px-4 py-2.5 border-b"
-          style={{ borderColor: "var(--border)" }}
-        >
-          <span className="text-xs font-semibold font-heading" style={{ color: "var(--foreground)" }}>
-            IOC Input
-          </span>
+      <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/60">
+          <span className="text-[11px] font-semibold font-heading text-slate-200">IOC Input</span>
           <div className="flex items-center gap-2">
-            <span
-              className="text-[10px] px-2 py-0.5 rounded tabular-nums"
-              style={{
-                background: overLimit ? "rgba(239,68,68,0.1)" : "var(--muted)",
-                border: overLimit ? "1px solid rgba(239,68,68,0.2)" : "1px solid var(--border)",
-                color: overLimit ? "#f87171" : "var(--muted-foreground)",
-              }}
-            >
+            <span className={`text-[9px] px-2 py-0.5 rounded-full tabular-nums ring-1 ${overLimit ? "ring-red-500/30 bg-red-950/40 text-red-400" : "ring-slate-700 bg-slate-800 text-slate-500"}`}>
               {uniqueLines.length} / 100
             </span>
             {input && (
-              <button
-                onClick={() => { setInput(""); setResults([]); setSearched(false); }}
-                className="p-0.5 rounded transition-colors"
-                style={{ color: "var(--muted-foreground)" }}
-              >
+              <button onClick={() => { setInput(""); setResults([]); setSearched(false); }} className="p-0.5 rounded transition-colors text-slate-500 hover:text-slate-300">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -222,77 +193,43 @@ export default function BulkLookupPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={"1.2.3.4\nevil.com\nd41d8cd98f00b204e9800998ecf8427e\nhttps://malware.example/payload.exe"}
-          className="w-full p-4 text-xs font-mono resize-none outline-none"
-          style={{
-            background: "var(--card)",
-            color: "var(--foreground)",
-            minHeight: "160px",
-          }}
+          className="w-full p-4 text-xs font-mono resize-none outline-none bg-transparent text-slate-300 placeholder:text-slate-700"
+          style={{ minHeight: "140px" }}
           spellCheck={false}
         />
-        <div
-          className="flex items-center gap-3 px-4 py-3 border-t"
-          style={{ borderColor: "var(--border)" }}
-        >
+        <div className="flex items-center gap-3 px-4 py-2.5 border-t border-slate-800/60">
           <button
             onClick={runLookup}
             disabled={loading || uniqueLines.length === 0 || overLimit}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded text-sm font-medium transition-all disabled:opacity-40"
-            style={{ background: "var(--primary)", color: "#000" }}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all disabled:opacity-40 bg-cyan-600 hover:bg-cyan-500 text-white"
           >
-            {loading ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Search className="w-3.5 h-3.5" />
-            )}
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
             {loading ? "Looking up…" : "Lookup"}
           </button>
-          {overLimit && (
-            <span className="text-xs" style={{ color: "#f87171" }}>
-              Exceeds 100 IOC limit — remove {uniqueLines.length - 100} entries
-            </span>
-          )}
+          {overLimit && <span className="text-xs text-red-400">Exceeds 100 IOC limit — remove {uniqueLines.length - 100} entries</span>}
         </div>
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="px-4 py-3 rounded text-sm" style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171" }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="px-4 py-3 rounded-md text-sm bg-red-950/20 border border-red-800/40 text-red-400">{error}</div>}
 
       {/* Results */}
       {searched && results.length > 0 && (
-        <div
-          className="rounded-lg border overflow-hidden"
-          style={{ background: "var(--card)", borderColor: "var(--border)" }}
-        >
-          {/* Summary */}
-          <div
-            className="flex items-center gap-4 px-4 py-3 border-b"
-            style={{ borderColor: "var(--border)" }}
-          >
-            <span className="text-xs font-semibold font-heading" style={{ color: "var(--foreground)" }}>
-              Results
-            </span>
+        <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
+          <div className="flex items-center gap-4 px-4 py-2.5 border-b border-slate-800/60">
+            <span className="text-[11px] font-semibold font-heading text-slate-200">Results</span>
             <div className="flex items-center gap-3 ml-auto">
-              <div className="flex items-center gap-1.5 text-xs" style={{ color: "#4ade80" }}>
+              <div className="flex items-center gap-1.5 text-xs text-emerald-400">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 {foundCount} found
               </div>
-              <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--muted-foreground)" }}>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
                 <XCircle className="w-3.5 h-3.5" />
                 {notFoundCount} not found
               </div>
             </div>
           </div>
 
-          {/* Table header */}
-          <div
-            className="hidden md:grid grid-cols-[1fr_100px_80px_120px_80px_120px_32px] gap-3 px-4 py-2 border-b text-[9px] uppercase tracking-wider font-semibold"
-            style={{ borderColor: "var(--border)", background: "var(--muted)", color: "var(--muted-foreground)" }}
-          >
+          <div className="hidden md:grid grid-cols-[1fr_100px_80px_120px_80px_120px_32px] gap-3 px-4 py-2 border-b border-slate-800/40 text-[9px] uppercase tracking-wider font-semibold text-slate-500 bg-slate-900/60">
             <span>IOC Value</span>
             <span>Det. Type</span>
             <span>Status</span>
@@ -302,66 +239,27 @@ export default function BulkLookupPage() {
             <span />
           </div>
 
-          {/* Rows */}
-          <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+          <div className="divide-y divide-slate-800/40">
             {results.map((r, i) => (
               <div
                 key={i}
-                className="grid grid-cols-1 md:grid-cols-[1fr_100px_80px_120px_80px_120px_32px] gap-2 md:gap-3 px-4 py-2.5 items-center"
-                style={{
-                  background: r.found ? "rgba(34,197,94,0.02)" : undefined,
-                }}
+                className="grid grid-cols-1 md:grid-cols-[1fr_100px_80px_120px_80px_120px_32px] gap-2 md:gap-3 px-4 py-2 items-center hover:bg-cyan-950/20 transition-colors"
               >
-                {/* Value */}
-                <div className="font-mono text-xs truncate" style={{ color: r.found ? "var(--foreground)" : "var(--muted-foreground)" }}>
-                  {r.value}
-                </div>
-
-                {/* Detected type */}
-                <div>
-                  <TypeBadge type={r.detectedType} />
-                </div>
-
-                {/* Found/not found */}
+                <div className={`font-mono text-xs truncate ${r.found ? "text-cyan-300" : "text-slate-500"}`}>{r.value}</div>
+                <div><TypeBadge type={r.detectedType} /></div>
                 <div>
                   {r.found ? (
-                    <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: "#4ade80" }}>
-                      <CheckCircle2 className="w-3 h-3" />
-                      Found
-                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400"><CheckCircle2 className="w-3 h-3" />Found</span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: "var(--muted-foreground)" }}>
-                      <AlertCircle className="w-3 h-3" />
-                      Not found
-                    </span>
+                    <span className="inline-flex items-center gap-1 text-[9px] text-slate-500"><AlertCircle className="w-3 h-3" />Not found</span>
                   )}
                 </div>
-
-                {/* DB type */}
-                <div>
-                  {r.type ? <TypeBadge type={r.type} /> : <span style={{ color: "var(--muted-foreground)" }} className="text-xs">—</span>}
-                </div>
-
-                {/* Severity */}
-                <div>
-                  <SevBadge score={r.severity} />
-                </div>
-
-                {/* Last seen */}
-                <div className="text-[10px] font-mono" style={{ color: "var(--muted-foreground)" }}>
-                  {r.last_seen?.slice(0, 10) ?? "—"}
-                </div>
-
-                {/* Link */}
+                <div>{r.type ? <TypeBadge type={r.type} /> : <span className="text-slate-600 text-xs">—</span>}</div>
+                <div><SevBadge score={r.severity} /></div>
+                <div className="text-[9px] font-mono text-slate-500">{r.last_seen?.slice(0, 10) ?? "—"}</div>
                 <div>
                   {r.found && r.id ? (
-                    <Link
-                      href={`/iocs/${r.id}`}
-                      className="flex items-center justify-center p-1 rounded transition-colors"
-                      style={{ color: "var(--muted-foreground)" }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--primary)"; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--muted-foreground)"; }}
-                    >
+                    <Link href={`/iocs/${r.id}`} className="flex items-center justify-center p-1 rounded transition-colors text-slate-500 hover:text-cyan-400">
                       <ChevronRight className="w-3.5 h-3.5" />
                     </Link>
                   ) : null}
@@ -373,7 +271,7 @@ export default function BulkLookupPage() {
       )}
 
       {searched && results.length === 0 && (
-        <div className="text-center py-12" style={{ color: "var(--muted-foreground)" }}>
+        <div className="text-center py-12 text-slate-500">
           <Search className="w-8 h-8 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No results returned</p>
         </div>

@@ -21,49 +21,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
-      <aside
-        className="w-56 flex-shrink-0 flex flex-col border-r border-slate-800 bg-gradient-to-b from-slate-950 to-slate-900"
-      >
+      <aside className="w-44 flex-shrink-0 flex flex-col border-r border-slate-800/80 bg-slate-950">
         {/* Brand */}
-        <div
-          className="h-14 flex items-center gap-2.5 px-4 border-b flex-shrink-0 relative overflow-hidden"
-          style={{ borderColor: "var(--sidebar-border)" }}
-        >
-          <div className="absolute inset-0 bg-grid-ops opacity-60 pointer-events-none" />
+        <div className="h-12 flex items-center gap-2 px-3 border-b border-slate-800/80 flex-shrink-0 relative overflow-hidden">
+          <div className="absolute inset-0 bg-grid-ops opacity-40 pointer-events-none" />
           <div
-            className="relative z-10 w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
-            style={{ background: "rgba(56,189,248,0.12)", border: "1px solid rgba(56,189,248,0.25)" }}
+            className="relative z-10 w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
+            style={{ background: "rgba(34,211,238,0.12)", border: "1px solid rgba(34,211,238,0.3)" }}
           >
-            <ShieldHalf className="w-4 h-4" style={{ color: "var(--primary)" }} />
+            <ShieldHalf className="w-3.5 h-3.5 text-cyan-400" />
           </div>
           <div className="relative z-10 min-w-0">
-            <div
-              className="text-xs font-bold tracking-[0.15em] uppercase font-heading truncate"
-              style={{ color: "var(--foreground)" }}
-            >
+            <div className="text-[11px] font-bold tracking-[0.12em] uppercase font-heading truncate text-white">
               ThreatLens
             </div>
-            <div className="text-[9px] tracking-[0.1em] uppercase" style={{ color: "var(--muted-foreground)" }}>
+            <div className="text-[8px] tracking-[0.08em] uppercase text-slate-500">
               SOC Platform
             </div>
           </div>
         </div>
 
-        {/* System status tag */}
-        <div
-          className="mx-3 mt-3 mb-1 flex items-center gap-2 px-2 py-1.5 rounded text-[10px] uppercase tracking-wider"
-          style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.15)", color: "#4ade80" }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] status-pulse flex-shrink-0" />
+        {/* System status */}
+        <div className="mx-2 mt-2 mb-1 flex items-center gap-1.5 px-2 py-1 rounded text-[9px] uppercase tracking-wider bg-emerald-950/40 border border-emerald-800/30 text-emerald-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 status-pulse flex-shrink-0" />
           <span className="font-medium">Systems Online</span>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          <div
-            className="text-[9px] uppercase tracking-[0.15em] font-semibold px-2 py-2"
-            style={{ color: "var(--muted-foreground)" }}
-          >
+        <nav className="flex-1 px-2 pt-2 space-y-0.5 overflow-y-auto">
+          <div className="text-[8px] uppercase tracking-[0.15em] font-semibold px-2 py-1.5 text-slate-600">
             Navigation
           </div>
           {navItems.map((item) => {
@@ -73,68 +59,45 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
-                className="group flex items-center gap-3 px-2.5 py-2 rounded-md transition-all duration-150 relative"
+                className="group flex items-center gap-2.5 px-2 py-1.5 rounded transition-all duration-150 relative"
                 style={
                   active
-                    ? {
-                        background: "rgba(56,189,248,0.10)",
-                        borderLeft: "2px solid var(--primary)",
-                      }
-                    : {
-                        borderLeft: "2px solid transparent",
-                      }
+                    ? { background: "rgba(34,211,238,0.08)", borderLeft: "2px solid #22d3ee" }
+                    : { borderLeft: "2px solid transparent" }
                 }
               >
                 <Icon
-                  className="w-4 h-4 flex-shrink-0 transition-colors"
-                  style={{ color: active ? "var(--primary)" : "var(--muted-foreground)" }}
+                  className="w-3.5 h-3.5 flex-shrink-0 transition-colors"
+                  style={{ color: active ? "#22d3ee" : "#64748b" }}
                 />
                 <div className="min-w-0 flex-1">
                   <div
-                    className="text-sm font-medium leading-none mb-0.5 transition-colors"
-                    style={{ color: active ? "var(--foreground)" : "var(--muted-foreground)" }}
+                    className="text-[11px] font-medium leading-none transition-colors"
+                    style={{ color: active ? "#e2e8f0" : "#64748b" }}
                   >
                     {item.label}
                   </div>
-                  <div className="text-[10px] leading-none" style={{ color: "var(--muted-foreground)", opacity: 0.7 }}>
-                    {item.desc}
-                  </div>
                 </div>
-                {active && (
-                  <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ color: "var(--primary)" }} />
-                )}
+                {active && <ChevronRight className="w-2.5 h-2.5 flex-shrink-0 text-cyan-400" />}
               </Link>
             );
           })}
         </nav>
 
         {/* Bottom: feed indicator + user */}
-        <div className="p-3 space-y-2 flex-shrink-0 border-t" style={{ borderColor: "var(--sidebar-border)" }}>
-          <div
-            className="flex items-center gap-2 px-2 py-1.5 rounded text-[10px]"
-            style={{ background: "var(--muted)", border: "1px solid var(--border)" }}
-          >
-            <Radio className="w-3 h-3 flex-shrink-0" style={{ color: "var(--primary)" }} />
-            <span className="flex-1 truncate" style={{ color: "var(--muted-foreground)" }}>
-              3 feeds active
-            </span>
+        <div className="px-2 pb-2 pt-2 space-y-1.5 flex-shrink-0 border-t border-slate-800/60">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded text-[9px] bg-slate-900 border border-slate-800">
+            <Radio className="w-2.5 h-2.5 flex-shrink-0 text-cyan-500" />
+            <span className="flex-1 truncate text-slate-500">3 feeds active</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 status-pulse" />
           </div>
-
-          <div className="flex items-center gap-2.5 px-2 py-1.5 rounded"
-            style={{ background: "var(--accent)", border: "1px solid var(--border)" }}>
-            <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 font-heading"
-              style={{ background: "rgba(56,189,248,0.15)", color: "var(--primary)", border: "1px solid rgba(56,189,248,0.25)" }}
-            >
+          <div className="flex items-center gap-2 px-2 py-1 rounded bg-slate-900 border border-slate-800">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 font-heading text-cyan-400 bg-cyan-950/60 border border-cyan-800/40">
               A
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium truncate" style={{ color: "var(--foreground)" }}>
-                Analyst
-              </div>
-              <div className="text-[9px] truncate" style={{ color: "var(--muted-foreground)" }}>
-                local
-              </div>
+              <div className="text-[10px] font-medium truncate text-slate-300">Analyst</div>
+              <div className="text-[8px] truncate text-slate-600">local</div>
             </div>
           </div>
         </div>
@@ -144,8 +107,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Top header bar */}
         <header
-          className="h-14 flex items-center justify-between px-6 flex-shrink-0 border-b"
-          style={{ background: "var(--card)", borderColor: "var(--border)" }}
+          className="h-12 flex items-center justify-between px-5 flex-shrink-0 border-b border-slate-800/80"
+          style={{ background: "var(--card)" }}
         >
           <div className="flex items-center gap-2">
             {navItems.map((item) => {
@@ -153,14 +116,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               const Icon = item.icon;
               return (
                 <div key={item.href} className="flex items-center gap-2">
-                  <Icon className="w-4 h-4" style={{ color: "var(--primary)" }} />
-                  <span className="text-sm font-medium font-heading" style={{ color: "var(--foreground)" }}>
-                    {item.label}
-                  </span>
-                  <span
-                    className="hidden sm:block text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider"
-                    style={{ background: "var(--muted)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
-                  >
+                  <Icon className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="text-sm font-semibold font-heading text-slate-200">{item.label}</span>
+                  <span className="hidden sm:block text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider bg-slate-800 text-slate-500 border border-slate-700/50">
                     {item.desc}
                   </span>
                 </div>
@@ -169,21 +127,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
-            <div
-              className="hidden sm:flex items-center gap-1.5 text-[10px] uppercase tracking-wider px-2 py-1 rounded"
-              style={{ background: "var(--muted)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] status-pulse" />
+            <div className="hidden sm:flex items-center gap-1.5 text-[9px] uppercase tracking-wider px-2 py-1 rounded bg-slate-800/80 text-emerald-400 border border-emerald-900/40">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 status-pulse" />
               Live
             </div>
-            <div className="text-xs font-mono" style={{ color: "var(--muted-foreground)" }}>
+            <div className="text-[10px] font-mono text-slate-500">
               {new Date().toISOString().slice(0, 10)}
             </div>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-5">
           {children}
         </main>
       </div>

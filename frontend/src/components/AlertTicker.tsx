@@ -20,33 +20,29 @@ interface AlertItemProps {
 
 function AlertItem({ alert, isNew }: AlertItemProps) {
   const sev = getSeverity(alert.severity);
+  const ringCls =
+    sev.label === "Critical" ? "ring-red-500/30 bg-red-950/40 text-red-400" :
+    sev.label === "High"     ? "ring-orange-500/30 bg-orange-950/40 text-orange-400" :
+    sev.label === "Medium"   ? "ring-amber-500/30 bg-amber-950/40 text-amber-400" :
+                               "ring-blue-500/30 bg-blue-950/40 text-blue-400";
   return (
     <div
       className="flex items-center gap-2 px-3 py-1.5 border-b last:border-b-0 transition-all duration-500"
       style={{
-        borderColor: "var(--border)",
+        borderColor: "rgba(34,211,238,0.07)",
         opacity: isNew ? 0 : 1,
         transform: isNew ? "translateY(-8px)" : "translateY(0)",
         animation: isNew ? "slideIn 0.4s ease forwards" : undefined,
       }}
     >
-      <span
-        className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-semibold flex-shrink-0 ${sev.cls}`}
-      >
+      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[8px] uppercase tracking-wider font-semibold flex-shrink-0 ring-1 ${ringCls}`}>
         <span className={`w-1 h-1 rounded-full ${sev.dotCls}`} />
         {sev.label}
       </span>
-      <span
-        className="font-mono text-[10px] truncate flex-1 min-w-0"
-        style={{ color: "var(--foreground)" }}
-        title={alert.value}
-      >
+      <span className="font-mono text-[10px] truncate flex-1 min-w-0 text-cyan-300" title={alert.value}>
         {alert.value.length > 28 ? alert.value.slice(0, 28) + "…" : alert.value}
       </span>
-      <span
-        className="text-[9px] font-mono flex-shrink-0"
-        style={{ color: "var(--muted-foreground)" }}
-      >
+      <span className="text-[8px] font-mono flex-shrink-0 text-slate-600">
         {formatRelativeTime(alert.first_seen)}
       </span>
     </div>
@@ -89,53 +85,36 @@ export default function AlertTicker() {
 
   return (
     <div
-      className="flex flex-col rounded-lg border overflow-hidden"
+      className="flex flex-col rounded-lg overflow-hidden"
       style={{
-        width: 300,
-        background: "var(--card)",
-        borderColor: "var(--border)",
+        width: 320,
+        background: "rgba(15,23,42,0.8)",
+        border: "1px solid rgba(34,211,238,0.15)",
+        boxShadow: "0 0 20px rgba(34,211,238,0.05), inset 0 1px 0 rgba(34,211,238,0.1)",
       }}
     >
       {/* Header */}
       <div
-        className="flex items-center gap-2 px-3 py-2 border-b flex-shrink-0"
-        style={{ borderColor: "var(--border)" }}
+        className="flex items-center gap-2 px-3 py-2 flex-shrink-0"
+        style={{ borderBottom: "1px solid rgba(34,211,238,0.1)" }}
       >
         <span
           className="w-2 h-2 rounded-full flex-shrink-0"
           style={{
             background: "#22c55e",
-            boxShadow: "0 0 0 0 rgba(34,197,94,0.6)",
+            boxShadow: "0 0 8px rgba(34,197,94,0.8)",
             animation: "livePulse 2s infinite",
           }}
         />
-        <span
-          className="text-[10px] uppercase tracking-wider font-semibold"
-          style={{ color: "#4ade80" }}
-        >
-          Live
-        </span>
-        <span
-          className="text-[10px] flex-1"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          High-severity alerts
-        </span>
-        <span
-          className="text-[9px] font-mono"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          30s
-        </span>
+        <span className="text-[9px] uppercase tracking-wider font-bold text-emerald-400">Live</span>
+        <span className="text-[9px] flex-1 text-slate-500 uppercase tracking-wider">High-severity alerts</span>
+        <span className="text-[8px] font-mono text-slate-600 bg-slate-800/60 px-1.5 py-0.5 rounded">30s</span>
       </div>
 
       {/* Alert list */}
       <div className="overflow-hidden">
         {alerts.length === 0 ? (
-          <div
-            className="px-3 py-4 text-[10px] text-center"
-            style={{ color: "var(--muted-foreground)" }}
-          >
+          <div className="px-3 py-4 text-[9px] text-center text-slate-600">
             Waiting for alerts…
           </div>
         ) : (

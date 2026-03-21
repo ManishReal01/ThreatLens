@@ -23,19 +23,9 @@ interface WatchedIOC {
 }
 
 /* ─── Subcomponents ─────────────────────────────────────────────────────── */
-const TYPE_COLORS: Record<string, string> = {
-  ipv4:        "bg-sky-500/10 text-sky-400 border-sky-500/20",
-  domain:      "bg-violet-500/10 text-violet-400 border-violet-500/20",
-  url:         "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  hash_md5:    "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  hash_sha1:   "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  hash_sha256: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-};
-
 function TypeBadge({ type }: { type: string }) {
-  const cls = TYPE_COLORS[type] ?? "bg-muted/20 text-muted-foreground border-muted/30";
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border ${cls}`}>
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider bg-cyan-950/50 text-cyan-300 ring-1 ring-cyan-500/20">
       {type.replace("hash_", "")}
     </span>
   );
@@ -43,8 +33,14 @@ function TypeBadge({ type }: { type: string }) {
 
 function SevBadge({ score }: { score: number | null | undefined }) {
   const sev = getSeverity(score);
+  const ringCls =
+    sev.label === "Critical" ? "ring-red-500/30 bg-red-950/40 text-red-400" :
+    sev.label === "High"     ? "ring-orange-500/30 bg-orange-950/40 text-orange-400" :
+    sev.label === "Medium"   ? "ring-amber-500/30 bg-amber-950/40 text-amber-400" :
+    sev.label === "Low"      ? "ring-blue-500/30 bg-blue-950/40 text-blue-400" :
+                               "ring-slate-500/30 bg-slate-800/40 text-slate-400";
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase tracking-wider font-semibold border ${sev.cls}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-semibold ring-1 ${ringCls}`}>
       <span className={`w-1 h-1 rounded-full ${sev.dotCls}`} />
       {sev.label}
     </span>
@@ -117,29 +113,24 @@ export default function WatchlistPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold font-heading tracking-tight flex items-center gap-2" style={{ color: "var(--foreground)" }}>
-            <Bookmark className="w-5 h-5" style={{ color: "var(--primary)" }} fill="currentColor" />
+          <h1 className="text-2xl font-bold font-heading tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent flex items-center gap-2">
+            <Bookmark className="w-5 h-5 text-cyan-400" fill="currentColor" />
             Analyst Watchlist
           </h1>
-          <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
-            Personal indicators under active monitoring
-          </p>
+          <p className="text-xs mt-0.5 text-slate-500">Personal indicators under active monitoring</p>
         </div>
-
         <div className="flex items-center gap-2">
           <button
             onClick={handleExportCSV}
             disabled={data.length === 0}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium disabled:opacity-40 transition-all"
-            style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium disabled:opacity-40 transition-all bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200"
           >
             <Download className="w-3 h-3" /> CSV
           </button>
           <button
             onClick={handleExportJSON}
             disabled={data.length === 0}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium disabled:opacity-40 transition-all"
-            style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium disabled:opacity-40 transition-all bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200"
           >
             <FileJson className="w-3 h-3" /> JSON
           </button>
@@ -148,16 +139,13 @@ export default function WatchlistPage() {
 
       {/* Stats strip */}
       {!loading && data.length > 0 && (
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           {(["Critical", "High", "Medium", "Low"] as const).map((label) => {
             const count = data.filter((ioc) => getSeverity(ioc.severity).label === label).length;
             if (count === 0) return null;
             const sev = getSeverity(label === "Critical" ? 9.5 : label === "High" ? 7.5 : label === "Medium" ? 5.0 : 2.0);
             return (
-              <div
-                key={label}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-medium border ${sev.cls}`}
-              >
+              <div key={label} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-medium ring-1 ${sev.cls}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${sev.dotCls}`} />
                 {count} {label}
               </div>
@@ -167,147 +155,81 @@ export default function WatchlistPage() {
       )}
 
       {/* Table */}
-      <div
-        className="rounded-lg border border-slate-700/50 overflow-hidden"
-        style={{ background: "var(--card)", borderColor: "var(--border)" }}
-      >
-        {/* Error */}
+      <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
         {error && (
-          <div
-            className="flex items-center gap-2 px-4 py-8 text-xs"
-            style={{ color: "#f87171" }}
-          >
-            <AlertTriangle className="w-4 h-4" />
-            {error}
+          <div className="flex items-center gap-2 px-4 py-8 text-xs text-red-400">
+            <AlertTriangle className="w-4 h-4" />{error}
           </div>
         )}
-
-        {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center h-32">
-            <Loader2 className="w-5 h-5 animate-spin" style={{ color: "var(--primary)" }} />
+            <Loader2 className="w-5 h-5 animate-spin text-cyan-500" />
           </div>
         )}
-
-        {/* Empty */}
         {!loading && !error && data.length === 0 && (
-          <div
-            className="flex flex-col items-center justify-center h-40 gap-3 text-xs"
-            style={{ color: "var(--muted-foreground)" }}
-          >
+          <div className="flex flex-col items-center justify-center h-40 gap-3 text-xs text-slate-500">
             <Shield className="w-10 h-10 opacity-15" />
-            <div className="text-sm font-heading font-medium" style={{ color: "var(--foreground)" }}>
-              Watchlist is empty
-            </div>
-            <div className="text-center max-w-[260px]">
-              Bookmark IOCs from their detail pages to track them here.
-            </div>
-            <Link
-              href="/search"
-              className="mt-1 px-3 py-1.5 rounded text-xs font-medium transition-all"
-              style={{
-                background: "rgba(56,189,248,0.10)",
-                border: "1px solid rgba(56,189,248,0.25)",
-                color: "var(--primary)",
-              }}
-            >
+            <div className="text-sm font-heading font-medium text-slate-300">Watchlist is empty</div>
+            <div className="text-center max-w-[260px]">Bookmark IOCs from their detail pages to track them here.</div>
+            <Link href="/search" className="mt-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all bg-cyan-600 hover:bg-cyan-500 text-white">
               Search IOCs →
             </Link>
           </div>
         )}
-
-        {/* Data */}
         {!loading && data.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-slate-700" style={{ borderBottom: `1px solid var(--border)` }}>
+                <tr className="border-b border-slate-800/60">
                   {["Indicator", "Type", "Score", "Severity", "Tags", "Last Seen", ""].map((h) => (
-                    <th
-                      key={h}
-                      className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
+                    <th key={h} className="text-left px-4 py-2 text-[9px] uppercase tracking-wider font-semibold text-slate-500">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {data.map((ioc, i) => {
+                {data.map((ioc) => {
                   const sev = getSeverity(ioc.severity);
                   return (
                     <tr
                       key={ioc.id}
-                      className="group transition-colors border-b border-slate-800/50"
-                      style={{
-                        borderBottom: i < data.length - 1 ? `1px solid var(--border)` : undefined,
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "var(--accent)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+                      className="group transition-colors hover:bg-cyan-950/30 border-b border-slate-800/40 last:border-b-0"
                     >
-                      <td className="px-4 py-2.5">
-                        <Link
-                          href={`/iocs/${ioc.id}`}
-                          className="font-mono font-medium hover:underline truncate max-w-[200px] block"
-                          style={{ color: "var(--primary)", fontFamily: "var(--font-mono)" }}
-                        >
+                      <td className="px-4 py-2">
+                        <Link href={`/iocs/${ioc.id}`} className="font-mono font-medium hover:underline truncate max-w-[200px] block text-cyan-300">
                           {ioc.value}
                         </Link>
                       </td>
-                      <td className="px-4 py-2.5">
-                        <TypeBadge type={ioc.type} />
-                      </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-2"><TypeBadge type={ioc.type} /></td>
+                      <td className="px-4 py-2">
                         <div className="flex items-center gap-2">
-                          <div
-                            className="w-12 h-1.5 rounded-full overflow-hidden"
-                            style={{ background: "var(--muted)" }}
-                          >
-                            <div
-                              className={`h-full rounded-full ${sev.barCls}`}
-                              style={{ width: `${((ioc.severity ?? 0) / 10) * 100}%` }}
-                            />
+                          <div className="w-12 h-1 rounded-full overflow-hidden bg-slate-800">
+                            <div className={`h-full rounded-full ${sev.barCls}`} style={{ width: `${((ioc.severity ?? 0) / 10) * 100}%` }} />
                           </div>
-                          <span className="tabular-nums font-mono" style={{ color: "var(--foreground)" }}>
-                            {(ioc.severity ?? 0).toFixed(1)}
-                          </span>
+                          <span className="tabular-nums font-mono text-slate-300">{(ioc.severity ?? 0).toFixed(1)}</span>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5">
-                        <SevBadge score={ioc.severity} />
-                      </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-4 py-2"><SevBadge score={ioc.severity} /></td>
+                      <td className="px-4 py-2">
                         <div className="flex flex-wrap gap-1">
                           {(ioc.tags ?? []).slice(0, 3).map((t) => (
-                            <span
-                              key={t.id}
-                              className="px-1.5 py-0.5 rounded text-[9px]"
-                              style={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.2)", color: "var(--primary)" }}
-                            >
+                            <span key={t.id} className="px-1.5 py-0.5 rounded-full text-[9px] ring-1 ring-cyan-500/20 bg-cyan-950/40 text-cyan-400">
                               {t.tag}
                             </span>
                           ))}
                           {(ioc.tags ?? []).length > 3 && (
-                            <span
-                              className="px-1.5 py-0.5 rounded text-[9px]"
-                              style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
-                            >
+                            <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-slate-800 text-slate-500">
                               +{(ioc.tags ?? []).length - 3}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 font-mono" style={{ color: "var(--muted-foreground)" }}>
-                        {formatRelativeTime(ioc.last_seen)}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="px-4 py-2 font-mono text-slate-500">{formatRelativeTime(ioc.last_seen)}</td>
+                      <td className="px-4 py-2 text-right">
                         <button
                           onClick={(e) => remove(e, ioc.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded transition-all"
-                          style={{ color: "var(--muted-foreground)" }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted-foreground)")}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded transition-all text-slate-500 hover:text-red-400"
                           title="Remove from watchlist"
                         >
                           <BookmarkMinus className="w-3.5 h-3.5" />

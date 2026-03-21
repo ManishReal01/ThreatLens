@@ -61,16 +61,6 @@ function Sk({ className = "" }: { className?: string }) {
   return <div className={`skeleton ${className}`} />;
 }
 
-/* ─── Type badge ────────────────────────────────────────────────────────── */
-const TYPE_COLORS: Record<string, string> = {
-  ipv4:        "bg-sky-500/10 text-sky-400 border-sky-500/20",
-  domain:      "bg-violet-500/10 text-violet-400 border-violet-500/20",
-  url:         "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  hash_md5:    "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  hash_sha1:   "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  hash_sha256: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-};
-
 const PREDEFINED_TAGS = ["confirmed", "false-positive", "watching", "investigating", "resolved", "c2", "phishing"];
 
 /* ─── Enrichment display ─────────────────────────────────────────────────── */
@@ -504,17 +494,16 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
   if (notFound) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
-        <AlertTriangle className="w-10 h-10" style={{ color: "#f87171" }} />
+        <AlertTriangle className="w-10 h-10 text-red-400" />
         <div>
-          <div className="font-semibold font-heading" style={{ color: "var(--foreground)" }}>IOC Not Found</div>
-          <div className="text-xs mt-1" style={{ color: "var(--muted-foreground)" }}>
-            The indicator <span className="font-mono">{id}</span> does not exist.
+          <div className="font-semibold font-heading text-slate-200">IOC Not Found</div>
+          <div className="text-xs mt-1 text-slate-500">
+            The indicator <span className="font-mono text-cyan-300">{id}</span> does not exist.
           </div>
         </div>
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs"
-          style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs bg-slate-800 border border-slate-700 text-slate-400"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Go Back
         </button>
@@ -524,10 +513,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
 
   if (error || !data) {
     return (
-      <div
-        className="flex items-center gap-3 px-5 py-4 rounded-lg border text-sm"
-        style={{ background: "rgba(239,68,68,0.08)", borderColor: "rgba(239,68,68,0.25)", color: "#f87171" }}
-      >
+      <div className="flex items-center gap-3 px-5 py-4 rounded-lg border text-sm bg-red-950/20 border-red-800/40 text-red-400">
         <AlertTriangle className="w-4 h-4 flex-shrink-0" />
         {error ?? "Unknown error loading IOC."}
       </div>
@@ -538,90 +524,57 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
 
   /* ── Render ─────────────────────────────────────────────────────────────── */
   return (
-    <div className="space-y-5 max-w-6xl animate-in fade-in duration-400">
+    <div className="space-y-4 max-w-6xl animate-in fade-in duration-400">
 
       {/* ── Breadcrumb nav ─────────────────────────────────────────────── */}
-      <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--muted-foreground)" }}>
-        <button onClick={() => router.back()} className="flex items-center gap-1 hover:text-primary transition-colors">
+      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+        <button onClick={() => router.back()} className="flex items-center gap-1 hover:text-cyan-400 transition-colors">
           <ArrowLeft className="w-3 h-3" /> Back
         </button>
         <ChevronRight className="w-3 h-3" />
-        <Link href="/search" className="hover:text-primary transition-colors">IOC Search</Link>
+        <Link href="/search" className="hover:text-cyan-400 transition-colors">IOC Search</Link>
         <ChevronRight className="w-3 h-3" />
-        <span className="font-mono truncate max-w-[200px]" style={{ color: "var(--foreground)" }}>{data.value}</span>
+        <span className="font-mono truncate max-w-[200px] text-slate-300">{data.value}</span>
       </div>
 
       {/* ── IOC Header ─────────────────────────────────────────────────── */}
-      <div
-        className="rounded-lg border border-slate-700/50 p-4 relative overflow-hidden"
-        style={{ background: "var(--card)", borderColor: "var(--border)" }}
-      >
-        <div className="absolute inset-0 bg-grid-ops opacity-30 pointer-events-none" />
+      <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 p-4 relative overflow-hidden">
+        <div className="absolute inset-0 bg-grid-ops opacity-20 pointer-events-none" />
         <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-2">
-              {/* Type badge */}
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border ${TYPE_COLORS[data.type] ?? "bg-muted/20 text-muted-foreground border-muted/30"}`}
-              >
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-mono uppercase tracking-wider bg-cyan-950/50 text-cyan-300 ring-1 ring-cyan-500/20">
                 {data.type}
               </span>
-              {/* Active/inactive */}
-              <span
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] uppercase tracking-wider border ${data.is_active ? "bg-[#22c55e]/10 text-[#4ade80] border-[#22c55e]/20" : "bg-muted/10 text-muted-foreground border-muted/20"}`}
-              >
-                <span className={`w-1 h-1 rounded-full ${data.is_active ? "bg-[#22c55e] status-pulse" : "bg-muted-foreground"}`} />
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] uppercase tracking-wider ring-1 ${data.is_active ? "bg-emerald-950/40 text-emerald-400 ring-emerald-500/20" : "bg-slate-800/40 text-slate-500 ring-slate-600/20"}`}>
+                <span className={`w-1 h-1 rounded-full ${data.is_active ? "bg-emerald-500 status-pulse" : "bg-slate-500"}`} />
                 {data.is_active ? "Active" : "Inactive"}
               </span>
             </div>
 
-            <h1
-              className="text-xl md:text-2xl font-bold break-all font-mono leading-tight"
-              style={{ color: "var(--primary)", fontFamily: "var(--font-mono)" }}
-            >
+            <h1 className="text-xl md:text-2xl font-bold break-all font-mono leading-tight text-cyan-300">
               {data.value}
             </h1>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px]" style={{ color: "var(--muted-foreground)" }}>
-              <div className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                First: {formatDate(data.first_seen)}
-              </div>
-              <div className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                Last: {formatDate(data.last_seen)}
-              </div>
-              <div className="flex items-center gap-1">
-                <Layers className="w-3 h-3" />
-                {data.source_count} source{data.source_count !== 1 ? "s" : ""}
-              </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] text-slate-500">
+              <div className="flex items-center gap-1"><Clock className="w-3 h-3" />First: {formatDate(data.first_seen)}</div>
+              <div className="flex items-center gap-1"><Clock className="w-3 h-3" />Last: {formatDate(data.last_seen)}</div>
+              <div className="flex items-center gap-1"><Layers className="w-3 h-3" />{data.source_count} source{data.source_count !== 1 ? "s" : ""}</div>
             </div>
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
             {/* Severity block */}
-            <div
-              className={`flex flex-col items-center px-4 py-2.5 rounded-lg border ${sev.cls}`}
-              style={{ minWidth: "80px" }}
-            >
-              <span className="text-2xl font-bold tabular-nums font-heading leading-none">
-                {(data.severity ?? 0).toFixed(1)}
-              </span>
-              <span className="text-[9px] uppercase tracking-wider mt-1 font-semibold">
-                {sev.label}
-              </span>
+            <div className={`flex flex-col items-center px-4 py-2.5 rounded-lg border ${sev.cls}`} style={{ minWidth: "80px" }}>
+              <span className="text-2xl font-bold tabular-nums font-heading leading-none">{(data.severity ?? 0).toFixed(1)}</span>
+              <span className="text-[9px] uppercase tracking-wider mt-1 font-semibold">{sev.label}</span>
             </div>
 
             {/* Action buttons */}
             <div className="flex flex-col gap-2">
               <button
                 onClick={toggleWatchlist}
-                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all"
-                style={{
-                  background: isWatched ? "rgba(56,189,248,0.12)" : "var(--muted)",
-                  border: `1px solid ${isWatched ? "rgba(56,189,248,0.3)" : "var(--border)"}`,
-                  color: isWatched ? "var(--primary)" : "var(--muted-foreground)",
-                }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium transition-all ${isWatched ? "bg-cyan-600 hover:bg-cyan-500 text-white" : "bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200"}`}
               >
                 {isWatched ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
                 {isWatched ? "Watching" : "Watch"}
@@ -629,24 +582,14 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
               <button
                 onClick={runEnrich}
                 disabled={enriching}
-                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all disabled:opacity-50"
-                style={{
-                  background: "rgba(168,85,247,0.08)",
-                  border: "1px solid rgba(168,85,247,0.25)",
-                  color: "#c084fc",
-                }}
+                className="flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium transition-all disabled:opacity-50 bg-purple-950/40 border border-purple-800/40 text-purple-400 hover:bg-purple-900/40"
               >
                 {enriching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
                 Enrich
               </button>
               <Link
                 href={`/iocs/${id}/graph`}
-                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all"
-                style={{
-                  background: "rgba(56,189,248,0.08)",
-                  border: "1px solid rgba(56,189,248,0.2)",
-                  color: "var(--primary)",
-                }}
+                className="flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium transition-all bg-cyan-950/40 border border-cyan-800/40 text-cyan-400 hover:bg-cyan-900/40"
               >
                 <Network className="w-3.5 h-3.5" />
                 Graph
