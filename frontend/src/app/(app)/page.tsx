@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 
 const GeoMap = dynamic(() => import("@/components/GeoMap"), { ssr: false });
+const AlertTicker = dynamic(() => import("@/components/AlertTicker"), { ssr: false });
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface FeedHealth {
@@ -170,18 +171,17 @@ export default function DashboardPage() {
 
       {/* ── Page header ───────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold font-heading tracking-tight" style={{ color: "var(--foreground)" }}>
             System Overview
           </h1>
           <p className="text-xs mt-0.5" style={{ color: "var(--muted-foreground)" }}>
             Real-time ingest pipeline &amp; threat telemetry
           </p>
-        </div>
-        <button
+          <button
             onClick={() => handleSync("otx")}
             disabled={syncing}
-            className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-all disabled:opacity-50"
+            className="mt-3 flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-all disabled:opacity-50"
             style={{
               background: "rgba(56,189,248,0.10)",
               border: "1px solid rgba(56,189,248,0.25)",
@@ -191,6 +191,12 @@ export default function DashboardPage() {
             <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
             Trigger Sync
           </button>
+        </div>
+
+        {/* Live alert ticker */}
+        <div className="flex-shrink-0">
+          <AlertTicker />
+        </div>
       </div>
 
       {/* ── Feed health cards ─────────────────────────────────────────── */}
