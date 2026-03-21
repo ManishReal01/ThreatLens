@@ -3,15 +3,14 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { fetchApi } from "@/lib/api.client";
-import { getSeverity, formatRelativeTime, formatDateTime } from "@/lib/utils";
+import { getSeverity, formatRelativeTime } from "@/lib/utils";
 import {
-  Activity, ServerCrash, RefreshCw, Zap, Shield, Database,
-  AlertTriangle, ArrowUpRight, Clock, MapPin, Radio,
+  Activity, RefreshCw, Zap, Shield, Database,
+  AlertTriangle, ArrowUpRight, MapPin, Radio, Users,
 } from "lucide-react";
 import Link from "next/link";
 
 const GeoMap = dynamic(() => import("@/components/GeoMap"), { ssr: false });
-const AlertTicker = dynamic(() => import("@/components/AlertTicker"), { ssr: false });
 const TrendChart = dynamic(() => import("@/components/TrendChart"), { ssr: false });
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -65,45 +64,112 @@ interface ActivityEvent {
   ingested_at: string;
 }
 
+interface ThreatActor {
+  id: string;
+  name: string;
+  mitre_id: string;
+  country: string | null;
+  linked_ioc_count: number;
+  aliases: string[];
+  motivations: string[];
+}
+
 /* ─── Skeleton ───────────────────────────────────────────────────────────── */
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`skeleton ${className}`} />;
 }
 
-/* ─── Feed name display map ─────────────────────────────────────────────── */
-const FEED_DISPLAY: Record<string, { label: string; short: string }> = {
-  abuseipdb: { label: "AbuseIPDB", short: "AIPDB" },
-  urlhaus: { label: "URLhaus", short: "UHAUS" },
-  otx: { label: "AlienVault OTX", short: "OTX" },
+/* ─── Feed name map ──────────────────────────────────────────────────────── */
+const FEED_DISPLAY: Record<string, { label: string }> = {
+  abuseipdb: { label: "AbuseIPDB" },
+  urlhaus:   { label: "URLhaus" },
+  otx:       { label: "AlienVault OTX" },
+  threatfox: { label: "ThreatFox" },
 };
 
-/* ─── IOC type badge ─────────────────────────────────────────────────────── */
-function TypeBadge({ type }: { type: string }) {
+/* ─── Severity dot ───────────────────────────────────────────────────────── */
+function SevDot({ score }: { score: number | null | undefined }) {
+  const sev = getSeverity(score);
+  const color =
+    sev.label === "Critical" ? "#ef4444" :
+    sev.label === "High"     ? "#f97316" :
+    sev.label === "Medium"   ? "#f59e0b" :
+    sev.label === "Low"      ? "#3b82f6" : "#64748b";
   return (
-    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider bg-cyan-950/50 text-cyan-300 ring-1 ring-cyan-500/20">
-      {type.replace("hash_", "")}
-    </span>
+    <span
+      className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
+      style={{ background: color, boxShadow: `0 0 4px ${color}90` }}
+    />
   );
 }
 
-/* ─── Severity badge ────────────────────────────────────────────────────── */
+/* ─── Severity badge (compact inline) ───────────────────────────────────── */
 function SevBadge({ score }: { score: number | null | undefined }) {
   const sev = getSeverity(score);
   const ringCls =
-    sev.label === "Critical" ? "ring-red-500/30 bg-red-950/40 text-red-400" :
-    sev.label === "High"     ? "ring-orange-500/30 bg-orange-950/40 text-orange-400" :
-    sev.label === "Medium"   ? "ring-amber-500/30 bg-amber-950/40 text-amber-400" :
-    sev.label === "Low"      ? "ring-blue-500/30 bg-blue-950/40 text-blue-400" :
-                               "ring-slate-500/30 bg-slate-800/40 text-slate-400";
+    sev.label === "Critical" ? "ring-red-500/30 bg-red-950/50 text-red-400" :
+    sev.label === "High"     ? "ring-orange-500/30 bg-orange-950/50 text-orange-400" :
+    sev.label === "Medium"   ? "ring-amber-500/30 bg-amber-950/50 text-amber-400" :
+    sev.label === "Low"      ? "ring-blue-500/30 bg-blue-950/50 text-blue-400" :
+                               "ring-slate-500/30 bg-slate-800/50 text-slate-400";
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] uppercase tracking-wider font-semibold ring-1 ${ringCls}`}>
-      <span className={`w-1 h-1 rounded-full ${sev.dotCls}`} />
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold ring-1 leading-none ${ringCls}`}>
       {sev.label}
     </span>
   );
 }
 
-/* ─── Main component ────────────────────────────────────────────────────── */
+/* ─── Panel wrapper ──────────────────────────────────────────────────────── */
+function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={`rounded-lg overflow-hidden flex flex-col ${className}`}
+      style={{
+        background: "rgba(10,16,32,0.7)",
+        border: "1px solid rgba(34,211,238,0.1)",
+        backdropFilter: "blur(4px)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ─── Panel header ───────────────────────────────────────────────────────── */
+function PanelHeader({
+  icon: Icon,
+  title,
+  subtitle,
+  right,
+}: {
+  icon?: React.ComponentType<{ className?: string }>;
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between px-3 py-2 flex-shrink-0"
+      style={{
+        borderBottom: "1px solid rgba(34,211,238,0.08)",
+        background: "rgba(34,211,238,0.02)",
+      }}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        {Icon && <Icon className="w-3 h-3 text-cyan-500 flex-shrink-0" />}
+        <div className="min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-300 font-mono leading-none">
+            {title}
+          </div>
+          {subtitle && <div className="text-[8px] text-slate-600 mt-0.5">{subtitle}</div>}
+        </div>
+      </div>
+      {right && <div className="flex-shrink-0">{right}</div>}
+    </div>
+  );
+}
+
+/* ─── Main ───────────────────────────────────────────────────────────────── */
 export default function DashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -113,18 +179,20 @@ export default function DashboardPage() {
   const [geoPoints, setGeoPoints] = useState<GeoIPPoint[]>([]);
   const [trends, setTrends] = useState<TrendPoint[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [threatActors, setThreatActors] = useState<ThreatActor[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function init() {
       try {
-        const [feedRes, recentRes, statsRes, geoRes, trendsRes, activityRes] = await Promise.all([
+        const [feedRes, recentRes, statsRes, geoRes, trendsRes, activityRes, actorsRes] = await Promise.all([
           fetchApi("/api/feeds/health"),
           fetchApi("/api/iocs?page_size=8&severity_min=7"),
           fetchApi("/api/stats"),
           fetchApi("/api/stats/geoip").catch(() => []),
           fetchApi("/api/stats/trends").catch(() => ({ trends: [] })),
           fetchApi("/api/stats/activity").catch(() => ({ events: [] })),
+          fetchApi("/api/threat-actors?page_size=5").catch(() => ({ items: [] })),
         ]);
 
         setFeeds(feedRes?.feeds ?? []);
@@ -133,6 +201,7 @@ export default function DashboardPage() {
         setGeoPoints(Array.isArray(geoRes) ? geoRes : []);
         setTrends(trendsRes?.trends ?? []);
         setActivity(activityRes?.events ?? []);
+        setThreatActors(actorsRes?.items ?? []);
       } catch (err) {
         console.error(err);
         setError("Could not reach the backend. Ensure the API is running at http://127.0.0.1:8000");
@@ -151,7 +220,7 @@ export default function DashboardPage() {
     setTimeout(() => setSyncing(false), 2000);
   };
 
-  /* ── Error state ─────────────────────────────────────────────────────── */
+  /* ── Error ─────────────────────────────────────────────────────────────── */
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
@@ -163,286 +232,383 @@ export default function DashboardPage() {
     );
   }
 
-  /* ── Loading skeleton ────────────────────────────────────────────────── */
+  /* ── Loading ────────────────────────────────────────────────────────────── */
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-7 w-48" />
-          <Skeleton className="h-8 w-28" />
+      <div className="space-y-2">
+        <Skeleton className="h-10" />
+        <Skeleton className="h-8" />
+        <div className="grid gap-2" style={{ gridTemplateColumns: "70% 1fr" }}>
+          <Skeleton className="h-96" />
+          <Skeleton className="h-96" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-20" />)}
+        <div className="grid grid-cols-3 gap-2">
+          <Skeleton className="h-48" />
+          <Skeleton className="h-48" />
+          <Skeleton className="h-48" />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-16" />)}
-        </div>
-        <Skeleton className="h-64" />
       </div>
     );
   }
 
-  return (
-    <div className="space-y-4 animate-in fade-in duration-400">
+  const maxActorCount = Math.max(...threatActors.map((a) => a.linked_ioc_count), 1);
 
-      {/* ── Page header + alert ticker ─────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold font-heading tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
-            System Overview
-          </h1>
-          <p className="text-xs mt-0.5 text-slate-500">
-            Real-time ingest pipeline &amp; threat telemetry
-          </p>
+  return (
+    <div className="space-y-2 animate-in fade-in duration-400">
+
+      {/* ═══ ROW 1 — Header + feed health + stats ════════════════════════ */}
+      <div
+        className="rounded-lg px-3 py-2 flex items-center gap-3 flex-wrap"
+        style={{
+          background: "rgba(10,16,32,0.8)",
+          border: "1px solid rgba(34,211,238,0.1)",
+        }}
+      >
+        {/* Title + sync */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div>
+            <div className="text-xs font-bold uppercase tracking-widest text-slate-200 font-mono leading-none">
+              System Overview
+            </div>
+            <div className="text-[8px] text-slate-600 mt-0.5 uppercase tracking-wider">
+              Threat Telemetry · Real-time
+            </div>
+          </div>
           <button
             onClick={() => handleSync("otx")}
             disabled={syncing}
-            className="mt-2.5 flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-all disabled:opacity-50 bg-cyan-600 hover:bg-cyan-500 text-white"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50"
+            style={{
+              background: syncing ? "rgba(34,211,238,0.05)" : "rgba(34,211,238,0.1)",
+              border: "1px solid rgba(34,211,238,0.25)",
+              color: "#22d3ee",
+            }}
           >
-            <RefreshCw className={`w-3 h-3 ${syncing ? "animate-spin" : ""}`} />
-            Trigger Sync
+            <RefreshCw className={`w-2.5 h-2.5 ${syncing ? "animate-spin" : ""}`} />
+            Sync
           </button>
         </div>
-        <div className="flex-shrink-0">
-          <AlertTicker />
-        </div>
-      </div>
 
-      {/* ── Feed health row ────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-        {feeds.length === 0 ? (
-          <div className="col-span-3 flex items-center justify-center h-16 rounded-lg border border-slate-800 text-xs text-slate-500">
-            No feed data available.
-          </div>
-        ) : (
-          feeds.map((feed) => {
+        {/* Divider */}
+        <div className="w-px h-8 flex-shrink-0" style={{ background: "rgba(34,211,238,0.1)" }} />
+
+        {/* Feed health inline strip */}
+        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+          {feeds.map((feed) => {
             const ok = feed.last_run_status === "success";
-            const display = FEED_DISPLAY[feed.feed_name] ?? { label: feed.feed_name, short: feed.feed_name.toUpperCase() };
+            const label = FEED_DISPLAY[feed.feed_name]?.label ?? feed.feed_name;
             return (
               <div
                 key={feed.feed_name}
-                className="bg-slate-900/40 backdrop-blur-sm rounded-lg border overflow-hidden relative"
-                style={{ borderColor: ok ? "rgba(148,163,184,0.1)" : "rgba(239,68,68,0.2)" }}
+                className="flex items-center gap-1.5 px-2 py-1 rounded"
+                style={{
+                  background: ok ? "rgba(16,185,129,0.06)" : "rgba(239,68,68,0.06)",
+                  border: `1px solid ${ok ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.2)"}`,
+                }}
               >
-                <div className="absolute inset-0 bg-grid-ops opacity-20 pointer-events-none" />
-                <div className="relative flex items-center gap-3 px-3 py-2.5">
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${ok ? "bg-emerald-500 status-pulse" : "bg-red-500"}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-semibold font-heading uppercase tracking-wider text-slate-200">
-                        {display.label}
-                      </span>
-                      <span className="text-sm font-bold font-heading tabular-nums text-slate-100">
-                        {ok ? feed.total_iocs.toLocaleString() : <span className="text-red-400 text-xs">Error</span>}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <div className="flex items-center gap-1 text-[9px] text-slate-500">
-                        <Clock className="w-2.5 h-2.5" />
-                        {formatRelativeTime(feed.last_run_at)}
-                      </div>
-                      {feed.last_iocs_fetched != null && ok && (
-                        <span className="text-[9px] text-emerald-500">+{(feed.last_iocs_new ?? 0).toLocaleString()} new</span>
-                      )}
-                      {feed.last_error_msg && (
-                        <span className="text-[9px] text-red-400 truncate" title={feed.last_error_msg}>{feed.last_error_msg}</span>
-                      )}
-                    </div>
-                  </div>
-                  {ok ? (
-                    <Activity className="w-3.5 h-3.5 flex-shrink-0 text-emerald-500" />
-                  ) : (
-                    <ServerCrash className="w-3.5 h-3.5 flex-shrink-0 text-red-400" />
-                  )}
-                </div>
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{
+                    background: ok ? "#10b981" : "#ef4444",
+                    boxShadow: ok ? "0 0 5px rgba(16,185,129,0.8)" : "0 0 5px rgba(239,68,68,0.6)",
+                    animation: ok ? "livePulse 2s infinite" : undefined,
+                  }}
+                />
+                <span className="text-[9px] font-mono font-semibold" style={{ color: ok ? "#6ee7b7" : "#fca5a5" }}>
+                  {label}
+                </span>
+                <span className="text-[9px] tabular-nums font-mono text-slate-500">
+                  {ok ? feed.total_iocs.toLocaleString() : "ERR"}
+                </span>
+                {ok && feed.last_iocs_new != null && feed.last_iocs_new > 0 && (
+                  <span className="text-[8px] font-mono text-emerald-600">+{feed.last_iocs_new}</span>
+                )}
               </div>
             );
-          })
+          })}
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-8 flex-shrink-0" style={{ background: "rgba(34,211,238,0.1)" }} />
+
+        {/* Stats badges */}
+        {stats && (
+          <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
+            {[
+              { label: "Total",    value: stats.total_iocs,                     color: "#22d3ee", icon: Database      },
+              { label: "Critical", value: stats.iocs_by_severity.critical ?? 0, color: "#ef4444", icon: AlertTriangle },
+              { label: "High",     value: stats.iocs_by_severity.high ?? 0,     color: "#f97316", icon: Zap           },
+              { label: "Medium",   value: stats.iocs_by_severity.medium ?? 0,   color: "#f59e0b", icon: Shield        },
+            ].map(({ label, value, color, icon: Icon }) => (
+              <div
+                key={label}
+                className="flex items-center gap-1 px-2 py-1 rounded"
+                style={{
+                  background: `${color}0a`,
+                  border: `1px solid ${color}25`,
+                }}
+              >
+                <Icon className="w-2.5 h-2.5 flex-shrink-0" style={{ color }} />
+                <span className="text-[9px] uppercase tracking-wider font-mono" style={{ color: `${color}aa` }}>
+                  {label}
+                </span>
+                <span className="text-[10px] font-bold font-mono tabular-nums" style={{ color }}>
+                  {value.toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
+
+        <style>{`
+          @keyframes livePulse {
+            0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.7); }
+            70%  { box-shadow: 0 0 0 4px rgba(16,185,129,0); }
+            100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+          }
+        `}</style>
       </div>
 
-      {/* ── Stats strip ────────────────────────────────────────────────── */}
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {[
-            { label: "Total IOCs", value: stats.total_iocs,                     icon: Database,      accent: "#22d3ee", bar: "bg-cyan-500"   },
-            { label: "Critical",   value: stats.iocs_by_severity.critical ?? 0, icon: AlertTriangle, accent: "#f87171", bar: "bg-red-500"    },
-            { label: "High",       value: stats.iocs_by_severity.high ?? 0,     icon: Zap,           accent: "#fb923c", bar: "bg-orange-500" },
-            { label: "Medium",     value: stats.iocs_by_severity.medium ?? 0,   icon: Shield,        accent: "#fbbf24", bar: "bg-amber-500"  },
-          ].map(({ label, value, icon: Icon, accent, bar }) => (
-            <div
-              key={label}
-              className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 p-3 relative overflow-hidden"
-            >
-              <div
-                className="absolute bottom-0 left-0 h-0.5 rounded-b-lg"
-                style={{ width: "100%", background: `linear-gradient(to right, ${accent}60, transparent)` }}
-              />
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-[9px] uppercase tracking-widest text-slate-500">{label}</span>
-                <Icon className="w-3 h-3 flex-shrink-0" style={{ color: accent }} />
-              </div>
-              <div className="text-xl font-bold font-heading tabular-nums text-slate-100">
-                {value.toLocaleString()}
-              </div>
-              <div className="mt-1.5 h-0.5 rounded-full bg-slate-800">
-                <div
-                  className={`h-full rounded-full ${bar}`}
-                  style={{ width: `${Math.min(100, (value / Math.max(stats.total_iocs, 1)) * 100)}%`, opacity: 0.7 }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* ═══ ROW 2 — Map (70%) + Live Alerts (30%) ═══════════════════════ */}
+      <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(0,70%) minmax(0,30%)" }}>
 
-      {/* ── Trend chart + GeoMap side by side ─────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {/* IOC ingest trend */}
-        <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/60">
-            <div>
-              <h2 className="text-[11px] font-semibold font-heading text-slate-200">IOC Ingest — Last 7 Days</h2>
-              <p className="text-[9px] mt-0.5 text-slate-500">Daily new indicators</p>
-            </div>
-            <div className="text-right">
-              <div className="text-base font-bold font-heading tabular-nums text-cyan-400">
-                {trends.reduce((s, t) => s + t.count, 0).toLocaleString()}
-              </div>
-              <div className="text-[9px] uppercase tracking-wider text-slate-500">this week</div>
-            </div>
-          </div>
-          <div className="px-3 pt-2 pb-1.5">
-            <TrendChart trends={trends} />
-          </div>
-        </div>
-
-        {/* GeoIP map */}
-        <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/60">
-            <div>
-              <h2 className="text-[11px] font-semibold font-heading text-slate-200 flex items-center gap-1.5">
-                <MapPin className="w-3 h-3 text-cyan-400" />
-                Threat Origin Map
-              </h2>
-              <p className="text-[9px] mt-0.5 text-slate-500">Top-100 IP IOCs by severity</p>
-            </div>
-          </div>
-          <div className="p-3">
+        {/* Map panel */}
+        <Panel>
+          <PanelHeader
+            icon={MapPin}
+            title="Threat Origin Map"
+            subtitle="Top-100 IP IOCs by severity · Mercator · Zoom with +/−"
+            right={
+              <span className="text-[9px] font-mono tabular-nums" style={{ color: "rgba(34,211,238,0.5)" }}>
+                {geoPoints.length} IPs
+              </span>
+            }
+          />
+          <div className="flex-1 p-0">
             <GeoMap points={geoPoints} />
           </div>
-        </div>
-      </div>
+        </Panel>
 
-      {/* ── Latest Activity feed ───────────────────────────────────────── */}
-      <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/60">
-          <h2 className="text-[11px] font-semibold font-heading text-slate-200 flex items-center gap-1.5">
-            <Radio className="w-3 h-3 text-cyan-400" />
-            Latest Activity
-          </h2>
-          <span className="text-[9px] text-slate-500">10 most recent IOC ingestion events</span>
-        </div>
-        {activity.length === 0 ? (
-          <div className="flex items-center justify-center h-20 text-xs text-slate-500">No activity yet.</div>
-        ) : (
-          <div className="divide-y divide-slate-800/60">
-            {activity.map((ev, i) => {
-              const sev = getSeverity(ev.severity);
-              const truncated = ev.ioc_value.length > 45 ? ev.ioc_value.slice(0, 45) + "…" : ev.ioc_value;
-              const when = formatRelativeTime(ev.ingested_at);
-              return (
+        {/* Live Alerts panel */}
+        <Panel>
+          <PanelHeader
+            icon={Zap}
+            title="Live Alerts"
+            subtitle="High-severity indicators"
+            right={
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{
+                    background: "#22c55e",
+                    boxShadow: "0 0 6px rgba(34,197,94,0.9)",
+                    animation: "livePulse 2s infinite",
+                  }}
+                />
                 <Link
-                  key={i}
-                  href={`/iocs/${ev.ioc_id}`}
-                  className="flex items-center gap-3 px-4 py-2 transition-colors group hover:bg-cyan-950/30"
+                  href="/search?severity_min=7"
+                  className="text-[8px] uppercase tracking-wider font-mono flex items-center gap-0.5 transition-colors"
+                  style={{ color: "rgba(34,211,238,0.5)" }}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${sev.dotCls}`} />
-                  <span className="flex-1 text-[11px] min-w-0 text-slate-400">
-                    <span className={`font-semibold uppercase tracking-wide text-[9px] mr-1 ${sev.textCls}`}>{sev.label}</span>
-                    <span>{ev.ioc_type} </span>
-                    <span className="font-mono text-cyan-300">{truncated}</span>
-                    <span className="text-slate-500"> · {ev.feed_name}</span>
-                  </span>
-                  <span className="text-[9px] flex-shrink-0 font-mono text-slate-600">{when}</span>
-                  <ArrowUpRight className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-cyan-400" />
+                  All <ArrowUpRight className="w-2.5 h-2.5" />
                 </Link>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── Recent high-severity IOCs table ───────────────────────────── */}
-      <div className="bg-slate-900/40 backdrop-blur-sm rounded-lg border border-slate-800/60 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/60">
-          <div>
-            <h2 className="text-[11px] font-semibold font-heading text-slate-200">Recent High-Severity Indicators</h2>
-            <p className="text-[9px] mt-0.5 text-slate-500">Severity ≥ 7.0 · sorted by score</p>
-          </div>
-          <Link
-            href="/search?severity_min=7"
-            className="flex items-center gap-1 text-[9px] uppercase tracking-wider px-2 py-1 rounded-md text-cyan-400 border border-cyan-800/40 hover:bg-cyan-950/30 transition-colors"
-          >
-            View All <ArrowUpRight className="w-3 h-3" />
-          </Link>
-        </div>
-
-        {recentIOCs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 gap-2 text-xs text-slate-500">
-            <Shield className="w-8 h-8 opacity-20" />
-            No high-severity IOCs found.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-slate-800/60">
-                  {["Indicator", "Type", "Score", "Severity", "Sources", "Last Seen"].map((h) => (
-                    <th key={h} className="text-left px-4 py-2 text-[9px] uppercase tracking-wider font-semibold text-slate-500">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
+              </div>
+            }
+          />
+          <div className="flex-1 overflow-y-auto" style={{ maxHeight: 420 }}>
+            {recentIOCs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-32 gap-2 text-xs text-slate-600">
+                <Shield className="w-6 h-6 opacity-20" />
+                No alerts
+              </div>
+            ) : (
+              <div>
                 {recentIOCs.map((ioc) => {
-                  const sev = getSeverity(ioc.severity);
+                  const truncated = ioc.value.length > 30 ? ioc.value.slice(0, 30) + "…" : ioc.value;
                   return (
-                    <tr
+                    <Link
                       key={ioc.id}
-                      className="group cursor-pointer transition-colors hover:bg-cyan-950/30 border-b border-slate-800/40 last:border-b-0"
-                      onClick={() => (window.location.href = `/iocs/${ioc.id}`)}
+                      href={`/iocs/${ioc.id}`}
+                      className="flex items-start gap-2 px-3 py-2 transition-colors group"
+                      style={{ borderBottom: "1px solid rgba(34,211,238,0.05)" }}
                     >
-                      <td className="px-4 py-2">
-                        <span className="font-mono text-xs font-medium group-hover:underline truncate max-w-[240px] block text-cyan-300">
-                          {ioc.value}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <TypeBadge type={ioc.type} />
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-14 h-1 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
-                            <div className={`h-full rounded-full ${sev.barCls}`} style={{ width: `${((ioc.severity ?? 0) / 10) * 100}%` }} />
-                          </div>
-                          <span className="tabular-nums font-mono text-[11px] text-slate-300">{(ioc.severity ?? 0).toFixed(1)}</span>
+                      <SevDot score={ioc.severity} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <SevBadge score={ioc.severity} />
+                          <span
+                            className="text-[8px] uppercase tracking-wider font-mono px-1 py-0.5 rounded"
+                            style={{ background: "rgba(34,211,238,0.07)", color: "#22d3ee80" }}
+                          >
+                            {ioc.type.replace("hash_", "")}
+                          </span>
                         </div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <SevBadge score={ioc.severity} />
-                      </td>
-                      <td className="px-4 py-2 tabular-nums text-slate-500">{ioc.source_count}</td>
-                      <td className="px-4 py-2 font-mono text-slate-500">{formatDateTime(ioc.last_seen)}</td>
-                    </tr>
+                        <div
+                          className="font-mono text-[10px] truncate group-hover:underline"
+                          style={{ color: "#67e8f9" }}
+                          title={ioc.value}
+                        >
+                          {truncated}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[8px] font-mono text-slate-600">
+                            {(ioc.severity ?? 0).toFixed(1)}
+                          </span>
+                          <span className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.3)" }}>·</span>
+                          <span className="text-[8px] font-mono text-slate-600">{formatRelativeTime(ioc.last_seen)}</span>
+                        </div>
+                      </div>
+                      <ArrowUpRight className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-cyan-400 mt-0.5" />
+                    </Link>
                   );
                 })}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
-        )}
+        </Panel>
       </div>
+
+      {/* ═══ ROW 3 — Trend (33%) + Activity (33%) + Threat Actors (33%) ══ */}
+      <div className="grid grid-cols-3 gap-2">
+
+        {/* Trend chart */}
+        <Panel>
+          <PanelHeader
+            icon={Activity}
+            title="IOC Ingest"
+            subtitle="Last 7 days"
+            right={
+              <div className="text-right">
+                <div className="text-sm font-bold font-mono tabular-nums text-cyan-400 leading-none">
+                  {trends.reduce((s, t) => s + t.count, 0).toLocaleString()}
+                </div>
+                <div className="text-[8px] uppercase tracking-wider text-slate-600 mt-0.5">this week</div>
+              </div>
+            }
+          />
+          <div className="flex-1 px-2 pt-2 pb-1" style={{ minHeight: 160 }}>
+            <TrendChart trends={trends} />
+          </div>
+        </Panel>
+
+        {/* Latest Activity */}
+        <Panel>
+          <PanelHeader
+            icon={Radio}
+            title="Latest Activity"
+            subtitle="IOC ingestion events"
+          />
+          <div className="flex-1 overflow-y-auto" style={{ maxHeight: 200 }}>
+            {activity.length === 0 ? (
+              <div className="flex items-center justify-center h-20 text-xs text-slate-600">
+                No activity yet.
+              </div>
+            ) : (
+              <div>
+                {activity.map((ev, i) => {
+                  const sev = getSeverity(ev.severity);
+                  const truncated = ev.ioc_value.length > 28 ? ev.ioc_value.slice(0, 28) + "…" : ev.ioc_value;
+                  return (
+                    <Link
+                      key={i}
+                      href={`/iocs/${ev.ioc_id}`}
+                      className="flex items-center gap-2 px-3 py-1.5 transition-colors group"
+                      style={{ borderBottom: "1px solid rgba(34,211,238,0.04)" }}
+                    >
+                      <SevDot score={ev.severity} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span className={`text-[7px] uppercase font-bold tracking-wider ${sev.textCls}`}>
+                            {sev.label}
+                          </span>
+                          <span className="text-[7px] text-slate-600">{ev.ioc_type}</span>
+                          <span className="text-[7px] text-slate-700">· {ev.feed_name}</span>
+                        </div>
+                        <div className="font-mono text-[9px] truncate group-hover:underline text-cyan-300/80">
+                          {truncated}
+                        </div>
+                      </div>
+                      <span className="text-[8px] font-mono text-slate-700 flex-shrink-0">
+                        {formatRelativeTime(ev.ingested_at)}
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </Panel>
+
+        {/* Top Threat Actors */}
+        <Panel>
+          <PanelHeader
+            icon={Users}
+            title="Top Threat Actors"
+            subtitle="By linked IOC count"
+            right={
+              <Link
+                href="/threat-actors"
+                className="text-[8px] uppercase tracking-wider font-mono flex items-center gap-0.5 transition-colors"
+                style={{ color: "rgba(34,211,238,0.5)" }}
+              >
+                All <ArrowUpRight className="w-2.5 h-2.5" />
+              </Link>
+            }
+          />
+          <div className="flex-1 px-3 py-2 space-y-2.5" style={{ maxHeight: 200, overflowY: "auto" }}>
+            {threatActors.length === 0 ? (
+              <div className="flex items-center justify-center h-16 text-xs text-slate-600">
+                No threat actors found.
+              </div>
+            ) : (
+              threatActors.map((actor, i) => {
+                const pct = Math.max(4, (actor.linked_ioc_count / maxActorCount) * 100);
+                const barColor =
+                  i === 0 ? "#ef4444" :
+                  i === 1 ? "#f97316" :
+                  i === 2 ? "#f59e0b" :
+                             "#22d3ee";
+                return (
+                  <Link key={actor.id} href={`/threat-actors/${actor.id}`} className="block group">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          className="text-[8px] font-mono px-1 py-0.5 rounded flex-shrink-0"
+                          style={{ background: `${barColor}15`, color: barColor, border: `1px solid ${barColor}30` }}
+                        >
+                          {actor.mitre_id}
+                        </span>
+                        <span
+                          className="text-[10px] font-bold font-mono truncate group-hover:underline"
+                          style={{ color: "#cbd5e1" }}
+                        >
+                          {actor.name}
+                        </span>
+                      </div>
+                      <span
+                        className="text-[10px] font-mono font-bold tabular-nums flex-shrink-0 ml-2"
+                        style={{ color: barColor }}
+                      >
+                        {actor.linked_ioc_count.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-0.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${pct}%`, background: barColor, boxShadow: `0 0 6px ${barColor}60` }}
+                      />
+                    </div>
+                    {actor.country && (
+                      <div className="text-[8px] text-slate-700 mt-0.5 font-mono">{actor.country}</div>
+                    )}
+                  </Link>
+                );
+              })
+            )}
+          </div>
+        </Panel>
+      </div>
+
     </div>
   );
 }
