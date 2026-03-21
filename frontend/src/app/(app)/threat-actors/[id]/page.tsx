@@ -8,7 +8,6 @@ import {
   AlertTriangle, ChevronRight, ChevronLeft,
 } from "lucide-react";
 import Link from "next/link";
-import { use } from "react";
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface Technique { id: string; name: string }
@@ -99,8 +98,9 @@ function TypeBadge({ type }: { type: string }) {
 }
 
 /* ─── Detail page ────────────────────────────────────────────────────────── */
-export default function ThreatActorDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+// Next.js 14: params is a plain object (not a Promise)
+export default function ThreatActorDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
 
   const [actor, setActor] = useState<ThreatActorDetail | null>(null);
   const [iocs, setIocs] = useState<PaginatedIOCs | null>(null);
