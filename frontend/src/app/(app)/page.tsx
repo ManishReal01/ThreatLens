@@ -12,6 +12,7 @@ import Link from "next/link";
 
 const GeoMap = dynamic(() => import("@/components/GeoMap"), { ssr: false });
 const AlertTicker = dynamic(() => import("@/components/AlertTicker"), { ssr: false });
+const TrendChart = dynamic(() => import("@/components/TrendChart"), { ssr: false });
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface FeedHealth {
@@ -47,6 +48,11 @@ interface GeoIPPoint {
   longitude: number;
   severity: number | null;
   feed_source: string;
+}
+
+interface TrendPoint {
+  date: string;
+  count: number;
 }
 
 /* ─── Skeleton ───────────────────────────────────────────────────────────── */
@@ -98,22 +104,25 @@ export default function DashboardPage() {
   const [recentIOCs, setRecentIOCs] = useState<IOCListItem[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [geoPoints, setGeoPoints] = useState<GeoIPPoint[]>([]);
+  const [trends, setTrends] = useState<TrendPoint[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function init() {
       try {
-        const [feedRes, recentRes, statsRes, geoRes] = await Promise.all([
+        const [feedRes, recentRes, statsRes, geoRes, trendsRes] = await Promise.all([
           fetchApi("/api/feeds/health"),
           fetchApi("/api/iocs?page_size=8&severity_min=7"),
           fetchApi("/api/stats"),
           fetchApi("/api/stats/geoip").catch(() => []),
+          fetchApi("/api/stats/trends").catch(() => ({ trends: [] })),
         ]);
 
         setFeeds(feedRes?.feeds ?? []);
         setRecentIOCs(recentRes?.items ?? []);
         setStats(statsRes ?? null);
         setGeoPoints(Array.isArray(geoRes) ? geoRes : []);
+        setTrends(trendsRes?.trends ?? []);
       } catch (err) {
         console.error(err);
         setError("Could not reach the backend. Ensure the API is running at http://127.0.0.1:8000");
@@ -300,6 +309,37 @@ export default function DashboardPage() {
           ))}
         </div>
       )}
+
+      {/* ── IOC ingest trend chart ────────────────────────────────────── */}
+      <div
+        className="rounded-lg border border-slate-700/50 overflow-hidden"
+        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+      >
+        <div
+          className="flex items-center justify-between px-4 py-3 border-b"
+          style={{ borderColor: "var(--border)" }}
+        >
+          <div>
+            <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+              IOC Ingest — Last 7 Days
+            </h2>
+            <p className="text-[10px] mt-0.5" style={{ color: "var(--muted-foreground)" }}>
+              Daily new indicators across all feeds
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-lg font-bold font-heading tabular-nums" style={{ color: "var(--primary)" }}>
+              {trends.reduce((s, t) => s + t.count, 0).toLocaleString()}
+            </div>
+            <div className="text-[9px] uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
+              total this week
+            </div>
+          </div>
+        </div>
+        <div className="px-4 pt-3 pb-2">
+          <TrendChart trends={trends} />
+        </div>
+      </div>
 
       {/* ── GeoIP threat map ──────────────────────────────────────────── */}
       <div
