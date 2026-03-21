@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { fetchApi } from "@/lib/api.client";
 import {
-  Search, ChevronLeft, ChevronRight, Users, Globe, Target, Loader2,
+  Search, ChevronLeft, ChevronRight, Users, Globe, Target, Loader2, Grid3X3,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -136,14 +136,28 @@ function ThreatActorsContent() {
             MITRE ATT&CK adversary groups and their linked indicators
           </p>
         </div>
-        {data && (
-          <div
-            className="text-xs px-3 py-1.5 rounded font-mono"
-            style={{ background: "var(--muted)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+        <div className="flex items-center gap-2">
+          {data && (
+            <div
+              className="text-xs px-3 py-1.5 rounded font-mono"
+              style={{ background: "var(--muted)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+            >
+              {data.total.toLocaleString()} groups
+            </div>
+          )}
+          <Link
+            href="/threat-actors/matrix"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all"
+            style={{
+              background: "rgba(20,184,166,0.08)",
+              border: "1px solid rgba(20,184,166,0.25)",
+              color: "#2dd4bf",
+            }}
           >
-            {data.total.toLocaleString()} groups
-          </div>
-        )}
+            <Grid3X3 className="w-3.5 h-3.5" />
+            ATT&CK Matrix
+          </Link>
+        </div>
       </div>
 
       {/* Search bar */}
