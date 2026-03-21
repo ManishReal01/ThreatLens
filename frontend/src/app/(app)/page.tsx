@@ -17,6 +17,7 @@ interface FeedHealth {
   last_iocs_fetched: number | null;
   last_iocs_new: number | null;
   last_error_msg: string | null;
+  total_iocs: number;
 }
 
 interface IOCListItem {
@@ -233,14 +234,14 @@ export default function DashboardPage() {
                     className="text-2xl font-bold font-heading tabular-nums"
                     style={{ color: ok ? "var(--foreground)" : "#f87171" }}
                   >
-                    {ok ? `+${(feed.last_iocs_new ?? 0).toLocaleString()}` : "Error"}
+                    {ok ? feed.total_iocs.toLocaleString() : "Error"}
                   </div>
                   <div className="text-[10px] mt-0.5 space-y-0.5" style={{ color: "var(--muted-foreground)" }}>
                     <div className="flex items-center gap-1">
                       <Clock className="w-2.5 h-2.5" />
                       {formatRelativeTime(feed.last_run_at)}
                       {feed.last_iocs_fetched != null && ok && (
-                        <span className="ml-1">· {feed.last_iocs_fetched.toLocaleString()} fetched</span>
+                        <span className="ml-1">· +{(feed.last_iocs_new ?? 0).toLocaleString()} new</span>
                       )}
                     </div>
                     {feed.last_error_msg && (

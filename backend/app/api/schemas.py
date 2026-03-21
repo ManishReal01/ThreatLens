@@ -140,6 +140,7 @@ class FeedHealthItem(BaseModel):
     last_iocs_fetched: Optional[int]
     last_iocs_new: Optional[int]
     last_error_msg: Optional[str]
+    total_iocs: int
 
 
 class FeedHealthResponse(BaseModel):

@@ -10,7 +10,7 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AdminUser, CurrentUser
@@ -18,6 +18,7 @@ from app.api.schemas import FeedHealthItem, FeedHealthResponse, TriggerResponse
 from app.config import settings
 from app.db.session import AsyncSessionLocal, get_db
 from app.models import FeedRunModel
+from app.models.ioc_source import IOCSourceModel
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,13 @@ async def get_feed_health(
     ``last_run_status`` is either ``"success"`` or ``"error"``
     (``"running"`` rows are excluded so stale in-progress rows are ignored).
     """
+    # Fetch cumulative per-feed IOC counts in one query
+    counts_result = await session.execute(
+        select(IOCSourceModel.feed_name, func.count().label("cnt"))
+        .group_by(IOCSourceModel.feed_name)
+    )
+    total_iocs_by_feed: dict[str, int] = {row[0]: row[1] for row in counts_result}
+
     items: list[FeedHealthItem] = []
 
     for feed_name in _KNOWN_FEEDS:
@@ -65,6 +73,7 @@ async def get_feed_health(
                     last_iocs_fetched=None,
                     last_iocs_new=None,
                     last_error_msg=None,
+                    total_iocs=total_iocs_by_feed.get(feed_name, 0),
                 )
             )
         else:
@@ -76,6 +85,7 @@ async def get_feed_health(
                     last_iocs_fetched=run.iocs_fetched,
                     last_iocs_new=run.iocs_new,
                     last_error_msg=run.error_msg,
+                    total_iocs=total_iocs_by_feed.get(feed_name, 0),
                 )
             )
 
