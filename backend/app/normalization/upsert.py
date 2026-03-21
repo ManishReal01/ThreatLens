@@ -80,7 +80,7 @@ async def _upsert_source_postgresql(
             feed_run_id=uuid.UUID(ioc.feed_run_id) if ioc.feed_run_id else None,
         )
         .on_conflict_do_update(
-            constraint="uq_ioc_sources_ioc_feed",
+            index_elements=["ioc_id", "feed_name"],
             set_={
                 "raw_score": ioc.raw_confidence,
                 "raw_payload": ioc.raw_payload,
