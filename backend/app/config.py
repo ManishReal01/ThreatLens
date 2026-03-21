@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # ThreatFox: same abuse.ch Auth-Key as URLhaus; 6-hour polling interval
     threatfox_schedule_minutes: int = 360
 
+    # MITRE ATT&CK: public STIX bundle, no API key — daily refresh
+    mitre_attack_schedule_minutes: int = 1440
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

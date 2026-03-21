@@ -22,6 +22,8 @@ from app.models import (
     TagModel,
     NoteModel,
     WatchlistModel,
+    ThreatActorModel,
+    ThreatActorIOCLinkModel,
 )
 
 # Alembic Config object, providing access to the .ini file

@@ -153,6 +153,71 @@ class TriggerResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Threat Actor schemas
+# ---------------------------------------------------------------------------
+
+
+class ThreatActorTechnique(BaseModel):
+    id: str
+    name: str
+
+
+class ThreatActorSoftware(BaseModel):
+    id: str
+    name: str
+
+
+class ThreatActorListItem(BaseModel):
+    id: uuid.UUID
+    mitre_id: str
+    name: str
+    aliases: list[str]
+    country: Optional[str]
+    motivations: list[str]
+    linked_ioc_count: int
+
+    model_config = {"from_attributes": True}
+
+
+class ThreatActorDetail(BaseModel):
+    id: uuid.UUID
+    mitre_id: str
+    name: str
+    aliases: list[str]
+    description: Optional[str]
+    country: Optional[str]
+    motivations: list[str]
+    first_seen: Optional[str]
+    last_seen: Optional[str]
+    techniques: list[dict[str, Any]]
+    software: list[dict[str, Any]]
+    associated_malware: list[str]
+    metadata: Optional[dict[str, Any]]
+    linked_ioc_count: int
+
+    model_config = {"from_attributes": True}
+
+
+class PaginatedThreatActorResponse(BaseModel):
+    items: list[ThreatActorListItem]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class ThreatActorLinkItem(BaseModel):
+    id: uuid.UUID
+    mitre_id: str
+    name: str
+    country: Optional[str]
+    motivations: list[str]
+    confidence: Optional[float]
+
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
 # Dashboard stats
 # ---------------------------------------------------------------------------
 

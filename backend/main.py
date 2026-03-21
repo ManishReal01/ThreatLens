@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routers import feeds, iocs
 from app.api.routers.iocs import stats_router
 from app.api.routers.workspace import ioc_workspace_router, watchlist_router
+from app.api.routers.threat_actors import ioc_ta_router, router as threat_actors_router
 from app.config import settings
 from app.feeds.scheduler import create_scheduler
 
@@ -54,6 +55,8 @@ app.include_router(stats_router)
 app.include_router(feeds.router)
 app.include_router(watchlist_router)
 app.include_router(ioc_workspace_router)
+app.include_router(threat_actors_router)
+app.include_router(ioc_ta_router)
 
 
 @app.get("/health", tags=["ops"])

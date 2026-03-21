@@ -43,6 +43,14 @@ async def _run_threatfox(settings: Settings) -> None:
             await worker.run(session)
 
 
+async def _run_mitre_attack(settings: Settings) -> None:
+    from app.feeds.mitre_attack import MITREAttackWorker
+
+    async with MITREAttackWorker(settings) as worker:
+        async with AsyncSessionLocal() as session:
+            await worker.run(session)
+
+
 def create_scheduler(settings: Settings) -> AsyncIOScheduler:
     """Return a configured AsyncIOScheduler (not yet started)."""
     scheduler = AsyncIOScheduler()
@@ -101,11 +109,26 @@ def create_scheduler(settings: Settings) -> AsyncIOScheduler:
         next_run_time=now,     # run immediately on startup
     )
 
+    scheduler.add_job(
+        _run_mitre_attack,
+        trigger="interval",
+        minutes=settings.mitre_attack_schedule_minutes,
+        kwargs={"settings": settings},
+        id="mitre_attack_feed",
+        name="MITRE ATT&CK Feed",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=600,
+        next_run_time=now,     # run immediately on startup
+    )
+
     logger.info(
-        "Scheduler configured: AbuseIPDB every %dm, URLhaus every %dm, OTX every %dm, ThreatFox every %dm",
+        "Scheduler configured: AbuseIPDB every %dm, URLhaus every %dm, OTX every %dm, "
+        "ThreatFox every %dm, MITRE ATT&CK every %dm",
         settings.abuseipdb_schedule_minutes,
         settings.urlhaus_schedule_minutes,
         settings.otx_schedule_minutes,
         settings.threatfox_schedule_minutes,
+        settings.mitre_attack_schedule_minutes,
     )
     return scheduler
