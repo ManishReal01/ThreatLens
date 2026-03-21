@@ -14,9 +14,12 @@ def _utcnow():
 
 
 class IOCSourceModel(Base):
-    """Feed observation log — one row per feed observation of an IOC."""
+    """Feed observation log — one row per feed per IOC (latest observation)."""
 
     __tablename__ = "ioc_sources"
+    __table_args__ = (
+        sa.UniqueConstraint("ioc_id", "feed_name", name="uq_ioc_sources_ioc_feed"),
+    )
 
     id: sa.orm.Mapped[uuid.UUID] = sa.orm.mapped_column(
         sa.UUID(as_uuid=True),

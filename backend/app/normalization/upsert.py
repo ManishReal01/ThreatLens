@@ -52,18 +52,72 @@ async def upsert_ioc(
     else:
         ioc_id, is_new = await _upsert_sqlite(session, ioc, canonical_value)
 
-    # Always create an ioc_sources row
-    source_row = IOCSourceModel(
-        id=uuid.uuid4(),
-        ioc_id=uuid.UUID(ioc_id),
-        feed_name=ioc.feed_name,
-        raw_score=ioc.raw_confidence,
-        raw_payload=ioc.raw_payload,
-        feed_run_id=uuid.UUID(ioc.feed_run_id) if ioc.feed_run_id else None,
-    )
-    session.add(source_row)
+    # Upsert ioc_sources — one row per (ioc_id, feed_name), keep the latest observation
+    dialect = _dialect_name(session)
+    if dialect == "postgresql":
+        await _upsert_source_postgresql(session, ioc_id, ioc)
+    else:
+        await _upsert_source_sqlite(session, ioc_id, ioc)
 
     return ioc_id, is_new
+
+
+async def _upsert_source_postgresql(
+    session: AsyncSession,
+    ioc_id: str,
+    ioc: NormalizedIOC,
+) -> None:
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    stmt = (
+        pg_insert(IOCSourceModel)
+        .values(
+            id=uuid.uuid4(),
+            ioc_id=uuid.UUID(ioc_id),
+            feed_name=ioc.feed_name,
+            raw_score=ioc.raw_confidence,
+            raw_payload=ioc.raw_payload,
+            feed_run_id=uuid.UUID(ioc.feed_run_id) if ioc.feed_run_id else None,
+        )
+        .on_conflict_do_update(
+            constraint="uq_ioc_sources_ioc_feed",
+            set_={
+                "raw_score": ioc.raw_confidence,
+                "raw_payload": ioc.raw_payload,
+                "ingested_at": _utcnow(),
+                "feed_run_id": uuid.UUID(ioc.feed_run_id) if ioc.feed_run_id else None,
+            },
+        )
+    )
+    await session.execute(stmt)
+
+
+async def _upsert_source_sqlite(
+    session: AsyncSession,
+    ioc_id: str,
+    ioc: NormalizedIOC,
+) -> None:
+    result = await session.execute(
+        select(IOCSourceModel).where(
+            IOCSourceModel.ioc_id == uuid.UUID(ioc_id),
+            IOCSourceModel.feed_name == ioc.feed_name,
+        )
+    )
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        existing.raw_score = ioc.raw_confidence
+        existing.raw_payload = ioc.raw_payload
+        existing.ingested_at = _utcnow()
+        existing.feed_run_id = uuid.UUID(ioc.feed_run_id) if ioc.feed_run_id else None
+    else:
+        session.add(IOCSourceModel(
+            id=uuid.uuid4(),
+            ioc_id=uuid.UUID(ioc_id),
+            feed_name=ioc.feed_name,
+            raw_score=ioc.raw_confidence,
+            raw_payload=ioc.raw_payload,
+            feed_run_id=uuid.UUID(ioc.feed_run_id) if ioc.feed_run_id else None,
+        ))
 
 
 async def _upsert_postgresql(

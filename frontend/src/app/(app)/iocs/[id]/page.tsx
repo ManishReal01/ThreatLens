@@ -427,11 +427,11 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
                             >
                               <div
                                 className="h-full rounded-full bg-[var(--primary)]"
-                                style={{ width: `${Math.min(src.raw_score, 100)}%` }}
+                                style={{ width: `${Math.min(src.raw_score * 100, 100)}%` }}
                               />
                             </div>
                             <span className="tabular-nums font-mono" style={{ color: "var(--foreground)" }}>
-                              {src.raw_score.toFixed(0)}%
+                              {(src.raw_score * 100).toFixed(0)}%
                             </span>
                           </div>
                         ) : (
