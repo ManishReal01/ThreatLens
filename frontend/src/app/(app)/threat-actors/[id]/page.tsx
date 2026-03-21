@@ -5,9 +5,22 @@ import { fetchApi } from "@/lib/api.client";
 import { getSeverity } from "@/lib/utils";
 import {
   ArrowLeft, Globe, Target, Shield, Cpu, ExternalLink,
-  AlertTriangle, ChevronRight, ChevronLeft,
+  AlertTriangle, ChevronRight, ChevronLeft, FileDown, Loader2,
 } from "lucide-react";
 import Link from "next/link";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
+async function downloadReport(endpoint: string, filename: string) {
+  const res = await fetch(`${BACKEND_URL}${endpoint}`, { method: "POST" });
+  if (!res.ok) throw new Error(`Report failed: ${res.status}`);
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
 interface Technique { id: string; name: string }
@@ -108,6 +121,7 @@ export default function ThreatActorDetailPage({ params }: { params: { id: string
   const [loadingIocs, setLoadingIocs] = useState(false);
   const [iocPage, setIocPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
     setLoadingActor(true);
@@ -199,18 +213,36 @@ export default function ThreatActorDetailPage({ params }: { params: { id: string
           )}
         </div>
 
-        {mitreUrl && (
-          <a
-            href={mitreUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors"
-            style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+        <div className="flex items-center gap-2">
+          {mitreUrl && (
+            <a
+              href={mitreUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors"
+              style={{ background: "var(--muted)", border: "1px solid var(--border)", color: "var(--muted-foreground)" }}
+            >
+              <ExternalLink className="w-3 h-3" />
+              MITRE ATT&CK
+            </a>
+          )}
+          <button
+            onClick={async () => {
+              setReporting(true);
+              try {
+                const safeName = actor.name.replace(/[^a-z0-9]/gi, "_");
+                await downloadReport(`/api/reports/threat-actor/${id}`, `threat-actor-${safeName}.pdf`);
+              } catch { /* silently fail */ }
+              finally { setReporting(false); }
+            }}
+            disabled={reporting}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors disabled:opacity-50"
+            style={{ background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)", color: "#4ade80" }}
           >
-            <ExternalLink className="w-3 h-3" />
-            MITRE ATT&CK
-          </a>
-        )}
+            {reporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />}
+            Generate Report
+          </button>
+        </div>
       </div>
 
       {/* Main grid */}
