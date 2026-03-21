@@ -164,6 +164,7 @@ class MITREAttackWorker(BaseFeedWorker):
                 "techniques": group_techniques.get(stix_id, []),
                 "software": sw_list,
                 "associated_malware": malware_names,
+                # DB column is "metadata" (Python attr is metadata_ to avoid SA clash)
                 "metadata": {
                     "stix_id": stix_id,
                     "created": obj.get("created"),
@@ -177,13 +178,17 @@ class MITREAttackWorker(BaseFeedWorker):
             }
 
             stmt = (
-                pg_insert(ThreatActorModel)
+                pg_insert(ThreatActorModel.__table__)
                 .values(**values)
                 .on_conflict_do_update(
                     index_elements=["mitre_id"],
                     set_={k: v for k, v in values.items() if k != "mitre_id"},
                 )
-                .returning(ThreatActorModel.id, ThreatActorModel.created_at, ThreatActorModel.updated_at)
+                .returning(
+                    ThreatActorModel.__table__.c.id,
+                    ThreatActorModel.__table__.c.created_at,
+                    ThreatActorModel.__table__.c.updated_at,
+                )
             )
             result = await session.execute(stmt)
             row = result.fetchone()
