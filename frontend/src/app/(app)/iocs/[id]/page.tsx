@@ -7,6 +7,7 @@ import {
   ArrowLeft, Network, ShieldAlert, Tag, MessageSquare,
   Clock, X, Edit3, Trash2, Save, Bookmark, BookmarkCheck,
   Layers, AlertTriangle, ChevronRight, Users, Zap, ExternalLink, Loader2,
+  GitCommitHorizontal, FileDown,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -169,6 +170,146 @@ function EnrichmentDisplay({ enrichment }: { enrichment: Record<string, unknown>
   );
 }
 
+/* ─── Feed colours ───────────────────────────────────────────────────────── */
+const FEED_COLORS: Record<string, string> = {
+  abuseipdb: "#38bdf8",
+  urlhaus:   "#4ade80",
+  otx:       "#c084fc",
+};
+const feedColor = (name: string) => FEED_COLORS[name] ?? "#94a3b8";
+
+/* ─── IOC Timeline ───────────────────────────────────────────────────────── */
+function IOCTimeline({ firstSeen, lastSeen, sources }: {
+  firstSeen: string;
+  lastSeen:  string;
+  sources:   IOCSource[];
+}) {
+  interface TimeEvent {
+    ts:    number;
+    label: string;
+    color: string;
+    kind:  "anchor" | "source";
+  }
+
+  const events: TimeEvent[] = [
+    { ts: new Date(firstSeen).getTime(), label: "First Seen", color: "#e2e8f0", kind: "anchor" as const },
+    ...sources.map((s) => ({
+      ts:    new Date(s.ingested_at).getTime(),
+      label: s.feed_name,
+      color: feedColor(s.feed_name),
+      kind:  "source" as const,
+    })),
+    { ts: new Date(lastSeen).getTime(), label: "Last Seen", color: "#f87171", kind: "anchor" as const },
+  ].sort((a, b) => a.ts - b.ts);
+
+  const minTs = events[0].ts;
+  const maxTs = events[events.length - 1].ts;
+  const range = maxTs - minTs || 1;
+  const pct   = (ts: number) => ((ts - minTs) / range) * 100;
+
+  // Unique feeds for legend
+  const seenFeeds = Array.from(new Set(sources.map((s) => s.feed_name)));
+
+  return (
+    <div
+      className="rounded-lg border overflow-hidden"
+      style={{ background: "var(--card)", borderColor: "var(--border)" }}
+    >
+      <div
+        className="flex items-center gap-2 px-4 py-3 border-b"
+        style={{ borderColor: "var(--border)" }}
+      >
+        <GitCommitHorizontal className="w-4 h-4" style={{ color: "var(--primary)" }} />
+        <h2 className="text-sm font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+          IOC Timeline
+        </h2>
+        <span
+          className="ml-auto text-[10px] px-1.5 py-0.5 rounded tabular-nums"
+          style={{ background: "var(--muted)", color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
+        >
+          {events.length} events
+        </span>
+      </div>
+      <div className="px-6 pt-6 pb-5">
+        {/* Track + dots */}
+        <div className="relative h-8">
+          {/* Horizontal track line */}
+          <div
+            className="absolute top-1/2 left-0 right-0 h-px"
+            style={{ background: "var(--border)", transform: "translateY(-50%)" }}
+          />
+          {events.map((ev, i) => (
+            <div
+              key={i}
+              className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 group"
+              style={{ left: `${pct(ev.ts)}%` }}
+            >
+              {/* Dot */}
+              <div
+                className="rounded-full border-2 transition-transform group-hover:scale-150 cursor-default"
+                style={{
+                  width:       ev.kind === "anchor" ? "12px" : "10px",
+                  height:      ev.kind === "anchor" ? "12px" : "10px",
+                  background:  ev.color,
+                  borderColor: ev.color,
+                  boxShadow:   `0 0 6px ${ev.color}66`,
+                }}
+                title={`${ev.label} — ${new Date(ev.ts).toLocaleString()}`}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Date labels at start / end */}
+        <div className="flex justify-between mt-2 text-[9px] font-mono" style={{ color: "var(--muted-foreground)" }}>
+          <span>{new Date(firstSeen).toLocaleDateString()}</span>
+          <span>{new Date(lastSeen).toLocaleDateString()}</span>
+        </div>
+
+        {/* Legend */}
+        {seenFeeds.length > 0 && (
+          <div className="flex flex-wrap gap-3 mt-4 pt-3 border-t" style={{ borderColor: "var(--border)" }}>
+            <span className="text-[9px] uppercase tracking-wider self-center" style={{ color: "var(--muted-foreground)" }}>
+              Feeds:
+            </span>
+            {seenFeeds.map((f) => (
+              <span key={f} className="flex items-center gap-1 text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+                <span
+                  className="inline-block w-2.5 h-2.5 rounded-full"
+                  style={{ background: feedColor(f) }}
+                />
+                {f}
+              </span>
+            ))}
+            <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+              <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: "#e2e8f0" }} />
+              first seen
+            </span>
+            <span className="flex items-center gap-1 text-[10px]" style={{ color: "var(--muted-foreground)" }}>
+              <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: "#f87171" }} />
+              last seen
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Download helper ────────────────────────────────────────────────────── */
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000";
+async function downloadReport(endpoint: string, filename: string) {
+  const res = await fetch(`${BACKEND_URL}${endpoint}`, { method: "POST" });
+  if (!res.ok) throw new Error(`Report failed: ${res.status}`);
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /* ─── Main page ─────────────────────────────────────────────────────────── */
 // Next.js 14: params is a plain object (not a Promise)
 export default function IOCDetailPage({ params }: { params: { id: string } }) {
@@ -190,6 +331,9 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
   // Enrichment
   const [enriching, setEnriching] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
+
+  // Report
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -507,6 +651,25 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
                 <Network className="w-3.5 h-3.5" />
                 Graph
               </Link>
+              <button
+                onClick={async () => {
+                  setReporting(true);
+                  try {
+                    await downloadReport(`/api/reports/ioc/${id}`, `ioc-${data.value.replace(/[^a-z0-9]/gi, "_")}.pdf`);
+                  } catch { /* silently fail */ }
+                  finally { setReporting(false); }
+                }}
+                disabled={reporting}
+                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all disabled:opacity-50"
+                style={{
+                  background: "rgba(34,197,94,0.08)",
+                  border: "1px solid rgba(34,197,94,0.25)",
+                  color: "#4ade80",
+                }}
+              >
+                {reporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                Report
+              </button>
             </div>
           </div>
         </div>
@@ -546,6 +709,15 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* IOC Timeline */}
+          {data.sources.length > 0 && (
+            <IOCTimeline
+              firstSeen={data.first_seen}
+              lastSeen={data.last_seen}
+              sources={data.sources}
+            />
           )}
 
           {/* Feed Observations */}
