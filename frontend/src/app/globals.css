@@ -3,3 +3,4 @@
 @tailwind utilities;
 
 body { background-color: #070d18; color: #e2e8f0; }
+*, *::before, *::after { border-color: rgb(34 211 238 / 0.15); }
