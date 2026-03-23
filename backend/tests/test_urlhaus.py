@@ -139,9 +139,13 @@ class TestMapRecord:
 
 
 class TestIsConfigured:
-    def test_always_configured(self):
-        worker = URLhausWorker(_make_settings())
+    def test_configured_with_api_key(self):
+        worker = URLhausWorker(_make_settings(urlhaus_api_key="test-key"))
         assert worker.is_configured() is True
+
+    def test_not_configured_without_api_key(self):
+        worker = URLhausWorker(_make_settings(urlhaus_api_key=""))
+        assert worker.is_configured() is False
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +155,7 @@ class TestIsConfigured:
 
 class TestFetchAndNormalize:
     async def test_returns_correct_counts(self, async_session):
-        worker = URLhausWorker(_make_settings())
+        worker = URLhausWorker(_make_settings(urlhaus_api_key="test-key"))
         api_data = {
             "query_status": "ok",
             "urls": [
@@ -160,7 +164,7 @@ class TestFetchAndNormalize:
                 _sample_record(url="http://c.example.com/z", url_status="unknown"),
             ],
         }
-        worker._post = AsyncMock(return_value=_mock_response(api_data))
+        worker._get = AsyncMock(return_value=_mock_response(api_data))
 
         async with worker:
             fetched, new, updated = await worker.fetch_and_normalize(
@@ -172,8 +176,8 @@ class TestFetchAndNormalize:
         assert updated == 0
 
     async def test_error_status_raises(self, async_session):
-        worker = URLhausWorker(_make_settings())
-        worker._post = AsyncMock(
+        worker = URLhausWorker(_make_settings(urlhaus_api_key="test-key"))
+        worker._get = AsyncMock(
             return_value=_mock_response({"query_status": "error", "urls": []})
         )
 
@@ -182,7 +186,7 @@ class TestFetchAndNormalize:
                 await worker.fetch_and_normalize(async_session, str(uuid.uuid4()))
 
     async def test_skips_records_without_url(self, async_session):
-        worker = URLhausWorker(_make_settings())
+        worker = URLhausWorker(_make_settings(urlhaus_api_key="test-key"))
         api_data = {
             "query_status": "ok",
             "urls": [
@@ -191,7 +195,7 @@ class TestFetchAndNormalize:
                 _sample_record(url="http://valid.example.com/file"),
             ],
         }
-        worker._post = AsyncMock(return_value=_mock_response(api_data))
+        worker._get = AsyncMock(return_value=_mock_response(api_data))
 
         async with worker:
             fetched, new, updated = await worker.fetch_and_normalize(
@@ -201,18 +205,18 @@ class TestFetchAndNormalize:
         assert fetched == 1
 
     async def test_deduplication(self, async_session):
-        worker = URLhausWorker(_make_settings())
+        worker = URLhausWorker(_make_settings(urlhaus_api_key="test-key"))
         record = _sample_record(url="http://dedup.example.com/test")
         api_data = {"query_status": "ok", "urls": [record]}
         run_id_1 = str(uuid.uuid4())
         run_id_2 = str(uuid.uuid4())
 
-        worker._post = AsyncMock(return_value=_mock_response(api_data))
+        worker._get = AsyncMock(return_value=_mock_response(api_data))
         async with worker:
             _, n1, u1 = await worker.fetch_and_normalize(async_session, run_id_1)
         await async_session.flush()
 
-        worker._post = AsyncMock(return_value=_mock_response(api_data))
+        worker._get = AsyncMock(return_value=_mock_response(api_data))
         async with worker:
             _, n2, u2 = await worker.fetch_and_normalize(async_session, run_id_2)
 
@@ -220,8 +224,8 @@ class TestFetchAndNormalize:
         assert n2 == 0 and u2 == 1
 
     async def test_empty_response(self, async_session):
-        worker = URLhausWorker(_make_settings())
-        worker._post = AsyncMock(
+        worker = URLhausWorker(_make_settings(urlhaus_api_key="test-key"))
+        worker._get = AsyncMock(
             return_value=_mock_response({"query_status": "ok", "urls": []})
         )
 
@@ -240,9 +244,9 @@ class TestFetchAndNormalize:
 
 class TestRunLifecycle:
     async def test_run_always_configured(self, async_session):
-        """URLhaus has no API key so run() should never produce 'not configured'."""
-        worker = URLhausWorker(_make_settings())
-        worker._post = AsyncMock(
+        """URLhaus requires an API key; run() succeeds when key is set."""
+        worker = URLhausWorker(_make_settings(urlhaus_api_key="test-key"))
+        worker._get = AsyncMock(
             return_value=_mock_response(
                 {"query_status": "ok", "urls": [_sample_record()]}
             )
@@ -256,8 +260,8 @@ class TestRunLifecycle:
         assert feed_run.iocs_fetched == 1
 
     async def test_run_records_error_on_api_failure(self, async_session):
-        worker = URLhausWorker(_make_settings())
-        worker._post = AsyncMock(side_effect=Exception("connection refused"))
+        worker = URLhausWorker(_make_settings(urlhaus_api_key="test-key"))
+        worker._get = AsyncMock(side_effect=Exception("connection refused"))
 
         async with worker:
             with pytest.raises(Exception, match="connection refused"):

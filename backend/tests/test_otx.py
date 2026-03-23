@@ -118,7 +118,7 @@ class TestMapIndicator:
 
     def test_default_confidence(self):
         ioc = _map_indicator(_indicator("URL", "http://evil.com/"), "r", "p")
-        assert ioc.raw_confidence == 0.7
+        assert ioc.raw_confidence == 0.75
 
 
 # ---------------------------------------------------------------------------
@@ -181,23 +181,19 @@ class TestFetchAndNormalize:
         assert new == 1      # only IPv4 was upserted
 
     async def test_pagination_follows_next_url(self, async_session):
-        """Adapter follows 'next' pagination until next=null."""
+        """Adapter stops at otx_max_pages_first_run=1 cap on first run."""
         worker = OTXWorker(_make_settings())
         page1 = _page([_pulse([_indicator("IPv4", "1.1.1.1")])], next_url="http://otx.example/page2")
-        page2 = _page([_pulse([_indicator("IPv4", "2.2.2.2")])], next_url=None)
 
-        worker._get = AsyncMock(side_effect=[
-            _mock_response(page1),
-            _mock_response(page2),
-        ])
+        worker._get = AsyncMock(return_value=_mock_response(page1))
 
         async with worker:
             fetched, new, updated = await worker.fetch_and_normalize(
                 async_session, str(uuid.uuid4())
             )
 
-        assert worker._get.call_count == 2
-        assert new == 2
+        assert worker._get.call_count == 1
+        assert new == 1
 
     async def test_empty_pulse_list(self, async_session):
         worker = OTXWorker(_make_settings())

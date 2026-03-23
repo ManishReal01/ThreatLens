@@ -13,7 +13,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AdminUser, CurrentUser
+from app.api.deps import CurrentUser
 from app.api.schemas import FeedHealthItem, FeedHealthResponse, TriggerResponse
 from app.config import settings
 from app.db.session import AsyncSessionLocal, get_db
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/feeds", tags=["feeds"])
 
-_KNOWN_FEEDS: tuple[str, ...] = ("abuseipdb", "urlhaus", "otx", "threatfox")
+_KNOWN_FEEDS: tuple[str, ...] = ("abuseipdb", "urlhaus", "otx", "threatfox", "cisa_kev", "mitre_attack")
 
 
 # ---------------------------------------------------------------------------
@@ -136,10 +136,16 @@ async def _run_feed_worker(feed_name: str) -> None:
             from app.feeds.threatfox import ThreatFoxWorker
 
             worker_cls = ThreatFoxWorker
-        else:
-            from app.feeds.otx import OTXWorker
+        elif feed_name == "cisa_kev":
+            from app.feeds.cisa_kev import CISAKEVWorker
 
-            worker_cls = OTXWorker
+            worker_cls = CISAKEVWorker
+        elif feed_name == "mitre_attack":
+            from app.feeds.mitre_attack import MITREAttackWorker
+
+            worker_cls = MITREAttackWorker
+        else:
+            raise ValueError(f"Unknown feed: {feed_name}")
 
         async with worker_cls(settings) as worker:
             async with AsyncSessionLocal() as session:

@@ -20,6 +20,8 @@ def canonicalize_ioc(value: str, ioc_type: IOCType) -> str:
         return value.strip().lower()
     elif ioc_type == IOCType.url:
         return _canonicalize_url(value)
+    elif ioc_type == IOCType.cve:
+        return value.strip().upper()
     else:
         raise ValueError(f"Unrecognized IOCType: {ioc_type!r}")
 

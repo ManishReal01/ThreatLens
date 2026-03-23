@@ -12,6 +12,7 @@ class IOCType(str, Enum):
     hash_sha1 = "hash_sha1"
     hash_sha256 = "hash_sha256"
     url = "url"
+    cve = "cve"
 
 
 class NormalizedIOC(BaseModel):

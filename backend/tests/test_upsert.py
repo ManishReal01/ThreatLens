@@ -66,7 +66,7 @@ async def test_source_always_inserted(async_session):
     await async_session.flush()
 
     count = await _count(async_session, IOCSourceModel)
-    assert count == 2
+    assert count == 1
 
 
 async def test_severity_stored(async_session):

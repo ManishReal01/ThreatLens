@@ -51,6 +51,14 @@ async def _run_mitre_attack(settings: Settings) -> None:
             await worker.run(session)
 
 
+async def _run_cisa_kev(settings: Settings) -> None:
+    from app.feeds.cisa_kev import CISAKEVWorker
+
+    async with CISAKEVWorker(settings) as worker:
+        async with AsyncSessionLocal() as session:
+            await worker.run(session)
+
+
 def create_scheduler(settings: Settings) -> AsyncIOScheduler:
     """Return a configured AsyncIOScheduler (not yet started)."""
     scheduler = AsyncIOScheduler()
@@ -122,13 +130,27 @@ def create_scheduler(settings: Settings) -> AsyncIOScheduler:
         next_run_time=now,     # run immediately on startup
     )
 
+    scheduler.add_job(
+        _run_cisa_kev,
+        trigger="interval",
+        minutes=settings.cisa_kev_schedule_minutes,
+        kwargs={"settings": settings},
+        id="cisa_kev_feed",
+        name="CISA KEV Feed",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=600,
+        next_run_time=now,     # run immediately on startup
+    )
+
     logger.info(
         "Scheduler configured: AbuseIPDB every %dm, URLhaus every %dm, OTX every %dm, "
-        "ThreatFox every %dm, MITRE ATT&CK every %dm",
+        "ThreatFox every %dm, MITRE ATT&CK every %dm, CISA KEV every %dm",
         settings.abuseipdb_schedule_minutes,
         settings.urlhaus_schedule_minutes,
         settings.otx_schedule_minutes,
         settings.threatfox_schedule_minutes,
         settings.mitre_attack_schedule_minutes,
+        settings.cisa_kev_schedule_minutes,
     )
     return scheduler

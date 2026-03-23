@@ -42,7 +42,7 @@ def test_missing_value_raises():
 
 
 def test_all_ioc_types_valid():
-    expected = {"ip", "domain", "hash_md5", "hash_sha1", "hash_sha256", "url"}
+    expected = {"ip", "domain", "hash_md5", "hash_sha1", "hash_sha256", "url", "cve"}
     actual = {t.value for t in IOCType}
     assert actual == expected
 

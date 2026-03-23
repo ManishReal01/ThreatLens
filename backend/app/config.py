@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # MITRE ATT&CK: public STIX bundle, no API key — daily refresh
     mitre_attack_schedule_minutes: int = 1440
 
+    # CISA KEV: public JSON feed, no API key — daily refresh
+    cisa_kev_schedule_minutes: int = 1440
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

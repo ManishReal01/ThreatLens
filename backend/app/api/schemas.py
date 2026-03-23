@@ -87,6 +87,8 @@ class IOCDetailResponse(BaseModel):
     tags: list[TagResponse]
     notes: list[NoteResponse]
 
+    model_config = {"from_attributes": True}
+
 
 # ---------------------------------------------------------------------------
 # Paginated search response

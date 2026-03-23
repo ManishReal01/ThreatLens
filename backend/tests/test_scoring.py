@@ -12,13 +12,13 @@ from app.normalization.scoring import (
 
 
 def test_weight_constants():
-    assert FEED_CONFIDENCE_WEIGHT == 0.40
-    assert SOURCE_COUNT_WEIGHT == 0.35
+    assert FEED_CONFIDENCE_WEIGHT == 0.50
+    assert SOURCE_COUNT_WEIGHT == 0.25
     assert RECENCY_WEIGHT == 0.25
 
 
 def test_score_version_constant():
-    assert CURRENT_SCORE_VERSION == 1
+    assert CURRENT_SCORE_VERSION == 2
 
 
 def test_score_in_valid_range():

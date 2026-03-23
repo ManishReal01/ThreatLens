@@ -155,6 +155,7 @@ async def _upsert_postgresql(
                 "score_explanation": severity.explanation,
                 "is_active": True,
                 "retired_at": None,
+                "metadata": ioc.metadata,
             },
         )
         .returning(IOCModel.id, literal_column("xmax = 0").label("is_new"))
