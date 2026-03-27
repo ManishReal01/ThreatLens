@@ -85,15 +85,20 @@ function ActorCard({ actor }: { actor: ThreatActor }) {
         {/* Name */}
         <div>
           <div
-            className="text-[12px] font-bold leading-tight transition-colors"
+            className="text-[12px] font-bold leading-tight transition-colors group-hover:text-cyan-300"
             style={{ color: "#e2e8f0" }}
           >
             {actor.name}
           </div>
           {actor.country && (
-            <div className="flex items-center gap-1 mt-0.5">
-              <Globe className="w-2.5 h-2.5 flex-shrink-0" style={{ color: "#475569" }} />
-              <span className="text-[9px] font-mono" style={{ color: "#475569" }}>{actor.country}</span>
+            <div className="flex items-center gap-1 mt-1">
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider"
+                style={{ background: "rgba(71,85,105,0.15)", border: "1px solid rgba(71,85,105,0.3)", color: "#64748b" }}
+              >
+                <Globe className="w-2 h-2 flex-shrink-0" />
+                {actor.country}
+              </span>
             </div>
           )}
         </div>

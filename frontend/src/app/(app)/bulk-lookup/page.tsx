@@ -5,7 +5,7 @@ import { fetchApi } from "@/lib/api.client";
 import { getSeverity } from "@/lib/utils";
 import {
   Search, Download, X, Loader2, CheckCircle2, XCircle,
-  ChevronRight, Terminal,
+  ChevronRight, Terminal, Copy, Check,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -81,6 +81,29 @@ function exportCsv(results: LookupResult[]) {
   const a    = document.createElement("a");
   a.href = url; a.download = `bulk-lookup-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ─── Copy button ────────────────────────────────────────────────────────── */
+function CopyBtn({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={copy}
+      className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 flex-shrink-0"
+      title="Copy value"
+    >
+      {copied
+        ? <Check className="w-3 h-3 text-emerald-400" />
+        : <Copy className="w-3 h-3 text-slate-600 hover:text-cyan-400" />
+      }
+    </button>
+  );
 }
 
 /* ─── Main ───────────────────────────────────────────────────────────────── */
@@ -281,7 +304,7 @@ export default function BulkLookupPage() {
             {results.map((r, i) => (
               <div
                 key={i}
-                className="hidden md:grid px-3 py-1.5 items-center transition-colors"
+                className="hidden md:grid px-3 py-1.5 items-center transition-colors group"
                 style={{
                   gridTemplateColumns: "1fr 80px 80px 90px 70px 90px 24px",
                   gap: "12px",
@@ -290,11 +313,14 @@ export default function BulkLookupPage() {
                 onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(8,28,44,0.8)")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "")}
               >
-                <div
-                  className="font-mono text-[11px] truncate"
-                  style={{ color: r.found ? "#67e8f9" : "#475569" }}
-                >
-                  {r.value}
+                <div className="flex items-center gap-1 min-w-0">
+                  <span
+                    className="font-mono text-[11px] truncate"
+                    style={{ color: r.found ? "#67e8f9" : "#475569" }}
+                  >
+                    {r.value}
+                  </span>
+                  <CopyBtn value={r.value} />
                 </div>
                 <div><TypeBadge type={r.detectedType} /></div>
                 <div>

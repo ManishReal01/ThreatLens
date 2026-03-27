@@ -27,6 +27,7 @@ router = APIRouter(prefix="/api/feeds", tags=["feeds"])
 _KNOWN_FEEDS: tuple[str, ...] = (
     "urlhaus", "otx", "threatfox", "cisa_kev", "mitre_attack",
     "virustotal", "feodotracker", "malwarebazaar", "sslbl",
+    "geoip_enricher",
 )
 
 
@@ -159,6 +160,10 @@ async def _run_feed_worker(feed_name: str) -> None:
             from app.feeds.sslbl import SSLBLWorker
 
             worker_cls = SSLBLWorker
+        elif feed_name == "geoip_enricher":
+            from app.feeds.geoip_enricher import GeoIPEnricherWorker
+
+            worker_cls = GeoIPEnricherWorker
         else:
             raise ValueError(f"Unknown feed: {feed_name}")
 

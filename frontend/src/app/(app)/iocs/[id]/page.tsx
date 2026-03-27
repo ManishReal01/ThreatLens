@@ -639,17 +639,34 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
                   Score Breakdown
                 </h2>
               </div>
-              <div className="p-4 grid sm:grid-cols-3 gap-4">
-                {Object.entries(data.score_explanation).map(([key, val]) => (
-                  <div key={key}>
-                    <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--muted-foreground)" }}>
-                      {key.replace(/_/g, " ")}
+              <div className="p-4 grid sm:grid-cols-3 gap-5">
+                {Object.entries(data.score_explanation).map(([key, val]) => {
+                  const numVal = typeof val === "number" ? val : null;
+                  const pct = numVal != null ? Math.min((numVal / 10) * 100, 100) : null;
+                  const color =
+                    numVal == null ? "#64748b" :
+                    numVal >= 8   ? "#ef4444" :
+                    numVal >= 6   ? "#f97316" :
+                    numVal >= 4   ? "#f59e0b" : "#22d3ee";
+                  return (
+                    <div key={key} className="space-y-1.5">
+                      <div className="text-[9px] uppercase tracking-wider font-bold" style={{ color: "var(--muted-foreground)" }}>
+                        {key.replace(/_/g, " ")}
+                      </div>
+                      <div className="text-xl font-bold tabular-nums font-heading leading-none" style={{ color }}>
+                        {numVal != null ? numVal.toFixed(2) : String(val)}
+                      </div>
+                      {pct != null && (
+                        <div className="h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{ width: `${pct}%`, background: color, boxShadow: `0 0 6px ${color}60` }}
+                          />
+                        </div>
+                      )}
                     </div>
-                    <div className="text-lg font-bold tabular-nums font-heading" style={{ color: "var(--foreground)" }}>
-                      {typeof val === "number" ? val.toFixed(typeof val === "number" && val < 10 ? 2 : 0) : String(val)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -693,12 +710,12 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
             ) : (
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-slate-700" style={{ borderBottom: `1px solid var(--border)` }}>
+                  <tr style={{ borderBottom: "1px solid rgba(34,211,238,0.08)", background: "rgba(34,211,238,0.015)" }}>
                     {["Source Feed", "Confidence", "Ingested At", "Raw Score"].map((h) => (
                       <th
                         key={h}
-                        className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider font-semibold"
-                        style={{ color: "var(--muted-foreground)" }}
+                        className="text-left px-4 py-2 text-[8px] uppercase tracking-widest font-bold font-mono"
+                        style={{ color: "#475569" }}
                       >
                         {h}
                       </th>
@@ -709,36 +726,39 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
                   {data.sources.map((src, i) => (
                     <tr
                       key={src.id}
-                      className="border-b border-slate-800/50"
-                      style={{ borderBottom: i < data.sources.length - 1 ? `1px solid var(--border)` : undefined }}
+                      className="transition-colors"
+                      style={{ borderBottom: "1px solid rgba(34,211,238,0.04)" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(8,28,44,0.8)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "")}
                     >
-                      <td className="px-4 py-2.5 font-semibold font-heading" style={{ color: "var(--foreground)" }}>
+                      <td className="px-4 py-2.5 font-mono text-[11px] font-semibold" style={{ color: "#22d3ee" }}>
                         {src.feed_name}
                       </td>
                       <td className="px-4 py-2.5">
                         {src.raw_score != null ? (
                           <div className="flex items-center gap-2">
-                            <div
-                              className="w-10 h-1.5 rounded-full overflow-hidden"
-                              style={{ background: "var(--muted)" }}
-                            >
+                            <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
                               <div
-                                className="h-full rounded-full bg-[var(--primary)]"
-                                style={{ width: `${Math.min(src.raw_score * 100, 100)}%` }}
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${Math.min(src.raw_score * 100, 100)}%`,
+                                  background: "#22d3ee",
+                                  boxShadow: "0 0 4px rgba(34,211,238,0.5)",
+                                }}
                               />
                             </div>
-                            <span className="tabular-nums font-mono" style={{ color: "var(--foreground)" }}>
+                            <span className="tabular-nums font-mono text-[10px]" style={{ color: "#94a3b8" }}>
                               {(src.raw_score * 100).toFixed(0)}%
                             </span>
                           </div>
                         ) : (
-                          <span style={{ color: "var(--muted-foreground)" }}>—</span>
+                          <span className="text-slate-700">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 font-mono" style={{ color: "var(--muted-foreground)" }}>
+                      <td className="px-4 py-2.5 font-mono text-[10px]" style={{ color: "#475569" }}>
                         {formatDateTime(src.ingested_at)}
                       </td>
-                      <td className="px-4 py-2.5 tabular-nums font-mono" style={{ color: "var(--muted-foreground)" }}>
+                      <td className="px-4 py-2.5 tabular-nums font-mono text-[10px]" style={{ color: "#475569" }}>
                         {src.raw_score?.toFixed(2) ?? "—"}
                       </td>
                     </tr>

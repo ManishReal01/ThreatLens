@@ -84,6 +84,14 @@ async def _run_sslbl(settings: Settings) -> None:
             await worker.run(session)
 
 
+async def _run_geoip_enricher(settings: Settings) -> None:
+    from app.feeds.geoip_enricher import GeoIPEnricherWorker
+
+    async with GeoIPEnricherWorker(settings) as worker:
+        async with AsyncSessionLocal() as session:
+            await worker.run(session)
+
+
 def create_scheduler(settings: Settings) -> AsyncIOScheduler:
     """Return a configured AsyncIOScheduler (not yet started)."""
     scheduler = AsyncIOScheduler()
@@ -207,11 +215,24 @@ def create_scheduler(settings: Settings) -> AsyncIOScheduler:
         next_run_time=now,     # run immediately on startup
     )
 
+    scheduler.add_job(
+        _run_geoip_enricher,
+        trigger="interval",
+        minutes=settings.geoip_enricher_schedule_minutes,
+        kwargs={"settings": settings},
+        id="geoip_enricher_feed",
+        name="GeoIP Enricher",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=600,
+        next_run_time=now,     # run immediately on startup
+    )
+
     logger.info(
         "Scheduler configured: URLhaus every %dm, OTX every %dm, "
         "ThreatFox every %dm, MITRE ATT&CK every %dm, CISA KEV every %dm, "
         "VirusTotal every %dm, Feodo Tracker every %dm, "
-        "MalwareBazaar every %dm, SSLBL every %dm",
+        "MalwareBazaar every %dm, SSLBL every %dm, GeoIP Enricher every %dm",
         settings.urlhaus_schedule_minutes,
         settings.otx_schedule_minutes,
         settings.threatfox_schedule_minutes,
@@ -221,5 +242,6 @@ def create_scheduler(settings: Settings) -> AsyncIOScheduler:
         settings.feodotracker_schedule_minutes,
         settings.malwarebazaar_schedule_minutes,
         settings.sslbl_schedule_minutes,
+        settings.geoip_enricher_schedule_minutes,
     )
     return scheduler

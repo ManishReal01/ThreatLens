@@ -110,65 +110,79 @@ async def get_stats(
 async def get_geoip_data(
     current_user: CurrentUser,
     session: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = Query(200, ge=1, le=500, description="Max IP IOCs to return (default 200, max 500)"),
 ) -> list[GeoIPPoint]:
-    """Return geolocated coordinates for the top-100 highest-severity IPv4 IOCs.
+    """Return geolocated IP IOCs ordered by severity.
 
-    Coordinates are cached in the ``latitude``/``longitude`` columns on the
-    iocs table so ip-api.com is only called once per unique IP address.
+    Coordinates are cached in the ``latitude``/``longitude`` columns by the
+    background GeoIP enricher.  This endpoint only does lightweight live
+    geocoding (capped at 50 IPs) so the response stays fast; the enricher
+    handles bulk backfill every 2 hours.
     """
-    # Fetch top 500 IP IOCs ordered by severity
+    # Fetch top-N IP IOCs ordered by severity (only those already geocoded first,
+    # then fall back to uncached ones so we always return as many points as possible)
     result = await session.execute(
         select(IOCModel)
         .where(IOCModel.type == "ip")
-        .order_by(IOCModel.severity.desc().nullslast())
-        .limit(500)
+        .order_by(
+            # Cached IPs first so the fast path dominates
+            IOCModel.latitude.is_(None),
+            IOCModel.severity.desc().nullslast(),
+        )
+        .limit(limit)
     )
-    iocs = result.scalars().all()
+    iocs = list(result.scalars().all())
 
-    # Geolocate any that don't yet have cached coordinates
+    # Live-geocode uncached IPs — cap at 50 to keep the response fast.
+    # The background GeoIPEnricherWorker handles the rest every 2 hours.
+    _LIVE_CAP = 50
+    _IPAPI_CHUNK = 100
     uncached = [ioc for ioc in iocs if ioc.latitude is None or ioc.longitude is None]
     if uncached:
+        to_geocode = uncached[:_LIVE_CAP]
         try:
-            payload = [{"query": ioc.value} for ioc in uncached]
             async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post("http://ip-api.com/batch", json=payload)
-            if resp.status_code == 200:
-                for ioc, geo in zip(uncached, resp.json()):
-                    if geo.get("status") == "success":
-                        ioc.latitude = geo["lat"]
-                        ioc.longitude = geo["lon"]
-                        # Merge country into metadata_ for tooltip display
-                        meta = dict(ioc.metadata_ or {})
-                        meta["country"] = geo.get("country")
-                        ioc.metadata_ = meta
-                await session.commit()
+                for chunk_start in range(0, len(to_geocode), _IPAPI_CHUNK):
+                    chunk = to_geocode[chunk_start: chunk_start + _IPAPI_CHUNK]
+                    payload = [{"query": ioc.value} for ioc in chunk]
+                    resp = await client.post("http://ip-api.com/batch", json=payload)
+                    if resp.status_code == 200:
+                        for ioc, geo in zip(chunk, resp.json()):
+                            if isinstance(geo, dict) and geo.get("status") == "success":
+                                ioc.latitude = geo["lat"]
+                                ioc.longitude = geo["lon"]
+                                meta = dict(ioc.metadata_ or {})
+                                meta["country"] = geo.get("country")
+                                ioc.metadata_ = meta
+            await session.commit()
         except Exception as exc:
-            logger.warning("GeoIP lookup failed: %s", exc)
+            logger.warning("GeoIP live lookup failed: %s", exc)
 
-    # Build response — only include IOCs that have valid coordinates
-    points: list[GeoIPPoint] = []
-    for ioc in iocs:
-        if ioc.latitude is None or ioc.longitude is None:
-            continue
-        # Pull first feed source name for tooltip
-        src_result = await session.execute(
-            select(IOCSourceModel.feed_name)
-            .where(IOCSourceModel.ioc_id == ioc.id)
-            .limit(1)
+    # Collect IDs of IOCs that now have coordinates
+    geocoded = [ioc for ioc in iocs if ioc.latitude is not None and ioc.longitude is not None]
+    if not geocoded:
+        return []
+
+    # Bulk-fetch feed sources in one query (avoids N+1)
+    ioc_ids = [ioc.id for ioc in geocoded]
+    src_result = await session.execute(
+        select(IOCSourceModel.ioc_id, IOCSourceModel.feed_name)
+        .where(IOCSourceModel.ioc_id.in_(ioc_ids))
+        .distinct(IOCSourceModel.ioc_id)
+    )
+    feed_by_id: dict[str, str] = {row[0]: row[1] for row in src_result}
+
+    return [
+        GeoIPPoint(
+            value=ioc.value,
+            latitude=ioc.latitude,
+            longitude=ioc.longitude,
+            severity=float(ioc.severity) if ioc.severity is not None else None,
+            feed_source=feed_by_id.get(ioc.id, "unknown"),
+            country=(ioc.metadata_ or {}).get("country"),
         )
-        feed_name = src_result.scalar_one_or_none() or "unknown"
-        country = (ioc.metadata_ or {}).get("country") if ioc.metadata_ else None
-        points.append(
-            GeoIPPoint(
-                value=ioc.value,
-                latitude=ioc.latitude,
-                longitude=ioc.longitude,
-                severity=float(ioc.severity) if ioc.severity is not None else None,
-                feed_source=feed_name,
-                country=country,
-            )
-        )
-    return points
+        for ioc in geocoded
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +283,11 @@ async def search_iocs(
     ),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=_MAX_PAGE_SIZE),
+    sort_by: Optional[str] = Query(
+        None,
+        description="Sort order: 'severity' (default, severity DESC then last_seen DESC) "
+                    "or 'last_seen' (last_seen DESC then severity DESC)",
+    ),
 ) -> PaginatedIOCResponse:
     """Search IOCs across all filters.  Results are always paginated."""
     base_where: list[sa.ColumnElement] = []
@@ -315,13 +334,15 @@ async def search_iocs(
     total_result = await session.execute(count_q)
     total = total_result.scalar_one()
 
+    if sort_by == "last_seen":
+        order_clause = [IOCModel.last_seen.desc(), IOCModel.severity.desc().nullslast()]
+    else:
+        order_clause = [IOCModel.severity.desc().nullslast(), IOCModel.last_seen.desc()]
+
     rows_q = (
         select(IOCModel)
         .where(*base_where)
-        .order_by(
-            IOCModel.severity.desc().nullslast(),
-            IOCModel.last_seen.desc(),
-        )
+        .order_by(*order_clause)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

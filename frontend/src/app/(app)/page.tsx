@@ -10,7 +10,20 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-const GeoMap = dynamic(() => import("@/components/GeoMap"), { ssr: false });
+const GeoMap = dynamic(() => import("@/components/GeoMap"), {
+  ssr: false,
+  loading: () => (
+    <div
+      className="flex flex-col items-center justify-center gap-2"
+      style={{ height: 264, background: "#070d18" }}
+    >
+      <MapPin className="w-5 h-5 text-slate-800" />
+      <span className="text-[10px] font-mono uppercase tracking-widest text-slate-700">
+        Loading threat map…
+      </span>
+    </div>
+  ),
+});
 const TrendChart = dynamic(() => import("@/components/TrendChart"), { ssr: false });
 
 /* ─── Types ─────────────────────────────────────────────────────────────── */
@@ -79,16 +92,16 @@ function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`skeleton ${className}`} />;
 }
 
-/* ─── Feed name map ──────────────────────────────────────────────────────── */
+/* ─── Feed display map ───────────────────────────────────────────────────── */
 const FEED_DISPLAY: Record<string, { label: string }> = {
   urlhaus:      { label: "URLhaus" },
   otx:          { label: "OTX" },
   threatfox:    { label: "ThreatFox" },
-  cisa_kev:     { label: "CISA KEV" },
-  mitre_attack: { label: "MITRE ATT&CK" },
+  cisa_kev:     { label: "CISA" },
+  mitre_attack: { label: "MITRE" },
   virustotal:   { label: "VirusTotal" },
   feodotracker: { label: "Feodo" },
-  malwarebazaar:{ label: "MalwareBazaar" },
+  malwarebazaar:{ label: "MBazaar" },
   sslbl:        { label: "SSLBL" },
 };
 
@@ -102,23 +115,27 @@ function SevDot({ score }: { score: number | null | undefined }) {
     sev.label === "Low"      ? "#3b82f6" : "#64748b";
   return (
     <span
-      className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0"
-      style={{ background: color, boxShadow: `0 0 4px ${color}90` }}
+      className="inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 mt-0.5"
+      style={{ background: color, boxShadow: `0 0 5px ${color}` }}
     />
   );
 }
 
-/* ─── Severity badge (compact inline) ───────────────────────────────────── */
+/* ─── Severity badge ─────────────────────────────────────────────────────── */
 function SevBadge({ score }: { score: number | null | undefined }) {
   const sev = getSeverity(score);
-  const ringCls =
-    sev.label === "Critical" ? "ring-red-500/30 bg-red-950/50 text-red-400" :
-    sev.label === "High"     ? "ring-orange-500/30 bg-orange-950/50 text-orange-400" :
-    sev.label === "Medium"   ? "ring-amber-500/30 bg-amber-950/50 text-amber-400" :
-    sev.label === "Low"      ? "ring-blue-500/30 bg-blue-950/50 text-blue-400" :
-                               "ring-slate-500/30 bg-slate-800/50 text-slate-400";
+  const styles: Record<string, { bg: string; border: string; color: string; glow: string }> = {
+    Critical: { bg: "rgba(239,68,68,0.12)",  border: "rgba(239,68,68,0.35)",  color: "#fca5a5", glow: "0 0 6px rgba(239,68,68,0.4)" },
+    High:     { bg: "rgba(249,115,22,0.12)", border: "rgba(249,115,22,0.35)", color: "#fdba74", glow: "0 0 6px rgba(249,115,22,0.4)" },
+    Medium:   { bg: "rgba(245,158,11,0.12)", border: "rgba(245,158,11,0.35)", color: "#fcd34d", glow: "0 0 4px rgba(245,158,11,0.3)" },
+    Low:      { bg: "rgba(59,130,246,0.12)", border: "rgba(59,130,246,0.35)", color: "#93c5fd", glow: "none" },
+  };
+  const s = styles[sev.label] ?? { bg: "rgba(100,116,139,0.12)", border: "rgba(100,116,139,0.3)", color: "#94a3b8", glow: "none" };
   return (
-    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold ring-1 leading-none ${ringCls}`}>
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold leading-none"
+      style={{ background: s.bg, border: `1px solid ${s.border}`, color: s.color, boxShadow: s.glow }}
+    >
       {sev.label}
     </span>
   );
@@ -128,11 +145,11 @@ function SevBadge({ score }: { score: number | null | undefined }) {
 function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={`rounded-lg overflow-hidden flex flex-col ${className}`}
+      className={`panel-card rounded-lg overflow-hidden flex flex-col ${className}`}
       style={{
-        background: "rgba(10,16,32,0.7)",
+        background: "rgba(8,13,28,0.8)",
         border: "1px solid rgba(34,211,238,0.1)",
-        backdropFilter: "blur(4px)",
+        backdropFilter: "blur(8px)",
       }}
     >
       {children}
@@ -156,17 +173,22 @@ function PanelHeader({
     <div
       className="flex items-center justify-between px-3 py-2 flex-shrink-0"
       style={{
-        borderBottom: "1px solid rgba(34,211,238,0.08)",
-        background: "rgba(34,211,238,0.02)",
+        borderBottom: "1px solid rgba(34,211,238,0.07)",
+        background: "rgba(34,211,238,0.015)",
       }}
     >
       <div className="flex items-center gap-2 min-w-0">
-        {Icon && <Icon className="w-3 h-3 text-cyan-500 flex-shrink-0" />}
+        {Icon && (
+          <Icon
+            className="w-3 h-3 flex-shrink-0"
+            style={{ color: "#22d3ee", filter: "drop-shadow(0 0 4px rgba(34,211,238,0.5))" }}
+          />
+        )}
         <div className="min-w-0">
           <div className="text-[10px] font-bold uppercase tracking-widest text-slate-300 font-mono leading-none">
             {title}
           </div>
-          {subtitle && <div className="text-[8px] text-slate-600 mt-0.5">{subtitle}</div>}
+          {subtitle && <div className="text-[8px] text-slate-700 mt-0.5">{subtitle}</div>}
         </div>
       </div>
       {right && <div className="flex-shrink-0">{right}</div>}
@@ -179,6 +201,7 @@ export default function DashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deferredLoading, setDeferredLoading] = useState(true);
+  const [mapLoading, setMapLoading] = useState(true);
   const [feeds, setFeeds] = useState<FeedHealth[]>([]);
   const [recentIOCs, setRecentIOCs] = useState<IOCListItem[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -188,13 +211,40 @@ export default function DashboardPage() {
   const [threatActors, setThreatActors] = useState<ThreatActor[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Animated stat counters
+  const [displayStats, setDisplayStats] = useState({ total: 0, critical: 0, high: 0, medium: 0 });
+
+  useEffect(() => {
+    if (!stats) return;
+    const targets = {
+      total:    stats.total_iocs,
+      critical: stats.iocs_by_severity?.critical ?? 0,
+      high:     stats.iocs_by_severity?.high ?? 0,
+      medium:   stats.iocs_by_severity?.medium ?? 0,
+    };
+    let step = 0;
+    const STEPS = 45;
+    const id = setInterval(() => {
+      step++;
+      const t = Math.min(step / STEPS, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      setDisplayStats({
+        total:    Math.round(targets.total * ease),
+        critical: Math.round(targets.critical * ease),
+        high:     Math.round(targets.high * ease),
+        medium:   Math.round(targets.medium * ease),
+      });
+      if (step >= STEPS) clearInterval(id);
+    }, 1200 / STEPS);
+    return () => clearInterval(id);
+  }, [stats]);
+
   useEffect(() => {
     async function init() {
       try {
-        // Phase 1 — critical data: unblocks the page render immediately
         const [feedRes, recentRes, statsRes] = await Promise.all([
           fetchApi("/api/feeds/health"),
-          fetchApi("/api/iocs?page_size=8&severity_min=6.5"),
+          fetchApi("/api/iocs?page_size=10&severity_min=5.0&sort_by=last_seen"),
           fetchApi("/api/stats"),
         ]);
         setFeeds(feedRes?.feeds ?? []);
@@ -207,14 +257,27 @@ export default function DashboardPage() {
         setLoading(false);
       }
 
-      // Phase 2 — deferred data: loads in background after page is visible
+      // Phase 2a — map: fetch 50 IPs first so the map renders fast,
+      // then silently expand to 200 in the background.
+      fetchApi("/api/stats/geoip?limit=50")
+        .catch(() => [])
+        .then((geo50) => {
+          setGeoPoints(Array.isArray(geo50) ? geo50 : []);
+          setMapLoading(false);
+          // Background expand — no await, no loading indicator
+          fetchApi("/api/stats/geoip?limit=200")
+            .catch(() => [])
+            .then((geo200) => {
+              if (Array.isArray(geo200) && geo200.length > 0) setGeoPoints(geo200);
+            });
+        });
+
+      // Phase 2b — other panels: independent of map
       Promise.all([
-        fetchApi("/api/stats/geoip").catch(() => []),
         fetchApi("/api/stats/trends").catch(() => ({ trends: [] })),
         fetchApi("/api/stats/activity").catch(() => ({ events: [] })),
         fetchApi("/api/threat-actors?page_size=5").catch(() => ({ items: [] })),
-      ]).then(([geoRes, trendsRes, activityRes, actorsRes]) => {
-        setGeoPoints(Array.isArray(geoRes) ? geoRes : []);
+      ]).then(([trendsRes, activityRes, actorsRes]) => {
         setTrends(trendsRes?.trends ?? []);
         setActivity(activityRes?.events ?? []);
         setThreatActors(actorsRes?.items ?? []);
@@ -231,11 +294,10 @@ export default function DashboardPage() {
     setTimeout(() => setSyncing(false), 2000);
   };
 
-  /* ── Error ─────────────────────────────────────────────────────────────── */
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div className="flex items-center gap-3 px-5 py-4 rounded-lg border text-sm bg-red-950/20 border-red-800/40 text-red-400">
+        <div className="flex items-center gap-3 px-5 py-4 rounded-lg border text-sm" style={{ background: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.25)", color: "#fca5a5" }}>
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
@@ -243,7 +305,6 @@ export default function DashboardPage() {
     );
   }
 
-  /* ── Loading ────────────────────────────────────────────────────────────── */
   if (loading) {
     return (
       <div className="space-y-2">
@@ -262,26 +323,30 @@ export default function DashboardPage() {
     );
   }
 
+  const criticalCount = stats?.iocs_by_severity?.critical ?? 0;
   const maxActorCount = Math.max(...threatActors.map((a) => a.linked_ioc_count), 1);
 
   return (
     <div className="space-y-2 animate-in fade-in duration-400">
 
-      {/* ═══ ROW 1 — Header + feed health + stats ════════════════════════ */}
+      {/* ═══ ROW 1 — Command bar ════════════════════════════════════════════ */}
       <div
-        className="rounded-lg px-3 py-2 flex items-center gap-3 flex-wrap"
+        className="rounded-lg px-3 py-2 flex items-center gap-3 flex-wrap relative overflow-hidden"
         style={{
-          background: "rgba(10,16,32,0.8)",
-          border: "1px solid rgba(34,211,238,0.1)",
+          background: "rgba(8,13,28,0.9)",
+          border: "1px solid rgba(34,211,238,0.12)",
         }}
       >
+        {/* Subtle grid bg */}
+        <div className="absolute inset-0 bg-grid-ops pointer-events-none" style={{ backgroundSize: "28px 28px", opacity: 0.4 }} />
+
         {/* Title + sync */}
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="relative z-10 flex items-center gap-3 flex-shrink-0">
           <div>
-            <div className="text-xs font-bold uppercase tracking-widest text-slate-200 font-mono leading-none">
+            <div className="text-xs font-bold uppercase tracking-widest font-mono leading-none" style={{ color: "#e2e8f0", textShadow: "0 0 10px rgba(34,211,238,0.3)" }}>
               System Overview
             </div>
-            <div className="text-[8px] text-slate-600 mt-0.5 uppercase tracking-wider">
+            <div className="text-[8px] text-slate-600 mt-0.5 uppercase tracking-wider font-mono">
               Threat Telemetry · Real-time
             </div>
           </div>
@@ -290,9 +355,10 @@ export default function DashboardPage() {
             disabled={syncing}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[9px] font-bold uppercase tracking-wider transition-all disabled:opacity-50"
             style={{
-              background: syncing ? "rgba(34,211,238,0.05)" : "rgba(34,211,238,0.1)",
-              border: "1px solid rgba(34,211,238,0.25)",
+              background: syncing ? "rgba(34,211,238,0.04)" : "rgba(34,211,238,0.08)",
+              border: "1px solid rgba(34,211,238,0.22)",
               color: "#22d3ee",
+              boxShadow: syncing ? "none" : "0 0 8px rgba(34,211,238,0.08)",
             }}
           >
             <RefreshCw className={`w-2.5 h-2.5 ${syncing ? "animate-spin" : ""}`} />
@@ -301,110 +367,141 @@ export default function DashboardPage() {
         </div>
 
         {/* Divider */}
-        <div className="w-px h-8 flex-shrink-0" style={{ background: "rgba(34,211,238,0.1)" }} />
+        <div className="relative z-10 w-px h-8 flex-shrink-0" style={{ background: "rgba(34,211,238,0.1)" }} />
 
-        {/* Feed health inline strip */}
-        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-          {feeds.map((feed) => {
-            const ok = feed.last_run_status === "success";
-            const label = FEED_DISPLAY[feed.feed_name]?.label ?? feed.feed_name;
+        {/* Feed health rail — grouped: Intel Feeds | Enrichment */}
+        <div className="relative z-10 flex-1 min-w-0 flex items-center gap-2 overflow-hidden">
+          {[
+            {
+              groupLabel: "INTEL",
+              names: ["urlhaus","otx","threatfox","cisa_kev","feodotracker","malwarebazaar","sslbl"],
+            },
+            {
+              groupLabel: "ENRICH",
+              names: ["mitre_attack","virustotal","geoip_enricher"],
+            },
+          ].map(({ groupLabel, names }) => {
+            const groupFeeds = names
+              .map((n) => feeds.find((f) => f.feed_name === n))
+              .filter(Boolean) as FeedHealth[];
+            if (groupFeeds.length === 0) return null;
             return (
-              <div
-                key={feed.feed_name}
-                className="flex items-center gap-1.5 px-2 py-1 rounded"
-                style={{
-                  background: ok ? "rgba(16,185,129,0.06)" : "rgba(239,68,68,0.06)",
-                  border: `1px solid ${ok ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.2)"}`,
-                }}
-              >
-                <span
-                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                  style={{
-                    background: ok ? "#10b981" : "#ef4444",
-                    boxShadow: ok ? "0 0 5px rgba(16,185,129,0.8)" : "0 0 5px rgba(239,68,68,0.6)",
-                    animation: ok ? "livePulse 2s infinite" : undefined,
-                  }}
-                />
-                <span className="text-[9px] font-mono font-semibold" style={{ color: ok ? "#6ee7b7" : "#fca5a5" }}>
-                  {label}
+              <div key={groupLabel} className="flex items-center gap-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                <span className="text-[7px] uppercase tracking-[0.15em] text-slate-700 font-mono flex-shrink-0 pr-1" style={{ borderRight: "1px solid rgba(34,211,238,0.08)" }}>
+                  {groupLabel}
                 </span>
-                <span className="text-[9px] tabular-nums font-mono text-slate-500">
-                  {!ok ? "ERR"
-                    : feed.feed_name === "mitre_attack"
-                      ? `${(feed.last_iocs_fetched ?? 0).toLocaleString()} actors`
-                    : feed.feed_name === "virustotal"
-                      ? `${(feed.last_iocs_fetched ?? 0).toLocaleString()} enriched`
-                    : feed.total_iocs.toLocaleString()
-                  }
-                </span>
-                {ok && feed.feed_name !== "mitre_attack" && feed.feed_name !== "virustotal"
-                  && feed.last_iocs_new != null && feed.last_iocs_new > 0 && (
-                  <span className="text-[8px] font-mono text-emerald-600">+{feed.last_iocs_new}</span>
-                )}
+                {groupFeeds.map((feed) => {
+                  const ok = feed.last_run_status === "success";
+                  const running = feed.last_run_status === "running";
+                  const label = FEED_DISPLAY[feed.feed_name]?.label ?? feed.feed_name;
+                  const dotColor = ok ? "#10b981" : running ? "#f59e0b" : "#ef4444";
+                  const textColor = ok ? "#6ee7b7" : running ? "#fcd34d" : "#fca5a5";
+                  const countLabel =
+                    feed.feed_name === "mitre_attack"    ? `${(feed.last_iocs_fetched ?? 0).toLocaleString()}` :
+                    feed.feed_name === "virustotal"      ? `${(feed.last_iocs_fetched ?? 0).toLocaleString()}` :
+                    feed.feed_name === "geoip_enricher"  ? `${(feed.last_iocs_fetched ?? 0).toLocaleString()} IPs` :
+                    !ok ? "ERR" :
+                    feed.total_iocs.toLocaleString();
+                  return (
+                    <div
+                      key={feed.feed_name}
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded flex-shrink-0"
+                      style={{
+                        background: ok ? "rgba(16,185,129,0.04)" : running ? "rgba(245,158,11,0.04)" : "rgba(239,68,68,0.05)",
+                        border: `1px solid ${ok ? "rgba(16,185,129,0.14)" : running ? "rgba(245,158,11,0.2)" : "rgba(239,68,68,0.2)"}`,
+                      }}
+                      title={feed.last_error_msg ?? `Last run: ${feed.last_run_at ?? "never"}`}
+                    >
+                      <span
+                        className="w-1 h-1 rounded-full flex-shrink-0"
+                        style={{
+                          background: dotColor,
+                          boxShadow: `0 0 4px ${dotColor}`,
+                          animation: ok ? "status-pulse-ring 2s ease-out infinite" : undefined,
+                        }}
+                      />
+                      <span className="text-[8px] font-mono font-medium" style={{ color: textColor }}>
+                        {label}
+                      </span>
+                      <span className="text-[8px] tabular-nums font-mono text-slate-700">
+                        {countLabel}
+                      </span>
+                      {ok && feed.last_iocs_new != null && feed.last_iocs_new > 0 && (
+                        <span className="text-[7px] font-mono" style={{ color: "#34d399" }}>+{feed.last_iocs_new}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
         </div>
 
         {/* Divider */}
-        <div className="w-px h-8 flex-shrink-0" style={{ background: "rgba(34,211,238,0.1)" }} />
+        <div className="relative z-10 w-px h-8 flex-shrink-0" style={{ background: "rgba(34,211,238,0.1)" }} />
 
-        {/* Stats badges */}
+        {/* Stats counters */}
         {stats && (
-          <div className="flex items-center gap-1.5 flex-shrink-0 flex-wrap">
+          <div className="relative z-10 flex items-center gap-1.5 flex-shrink-0 flex-wrap">
             {[
-              { label: "Total",    value: stats.total_iocs,                     color: "#22d3ee", icon: Database      },
-              { label: "Critical", value: stats.iocs_by_severity.critical ?? 0, color: "#ef4444", icon: AlertTriangle },
-              { label: "High",     value: stats.iocs_by_severity.high ?? 0,     color: "#f97316", icon: Zap           },
-              { label: "Medium",   value: stats.iocs_by_severity.medium ?? 0,   color: "#f59e0b", icon: Shield        },
-            ].map(({ label, value, color, icon: Icon }) => (
+              { label: "Total",    value: displayStats.total,    color: "#22d3ee", icon: Database,      animation: undefined },
+              { label: "Critical", value: displayStats.critical, color: "#ef4444", icon: AlertTriangle, animation: criticalCount > 0 ? "crit-pulse 1.6s ease-in-out infinite" : undefined },
+              { label: "High",     value: displayStats.high,     color: "#f97316", icon: Zap,           animation: undefined },
+              { label: "Medium",   value: displayStats.medium,   color: "#f59e0b", icon: Shield,        animation: undefined },
+            ].map(({ label, value, color, icon: Icon, animation }) => (
               <div
                 key={label}
                 className="flex items-center gap-1 px-2 py-1 rounded"
                 style={{
-                  background: `${color}0a`,
-                  border: `1px solid ${color}25`,
+                  background: `${color}08`,
+                  border: `1px solid ${color}22`,
+                  animation,
                 }}
               >
                 <Icon className="w-2.5 h-2.5 flex-shrink-0" style={{ color }} />
-                <span className="text-[9px] uppercase tracking-wider font-mono" style={{ color: `${color}aa` }}>
+                <span className="text-[9px] uppercase tracking-wider font-mono" style={{ color: `${color}88` }}>
                   {label}
                 </span>
-                <span className="text-[10px] font-bold font-mono tabular-nums" style={{ color }}>
+                <span
+                  className="text-[11px] font-bold font-mono tabular-nums"
+                  style={{ color, textShadow: `0 0 8px ${color}60` }}
+                >
                   {value.toLocaleString()}
                 </span>
               </div>
             ))}
           </div>
         )}
-
-        <style>{`
-          @keyframes livePulse {
-            0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.7); }
-            70%  { box-shadow: 0 0 0 4px rgba(16,185,129,0); }
-            100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
-          }
-        `}</style>
       </div>
 
-      {/* ═══ ROW 2 — Map (70%) + Live Alerts (30%) ═══════════════════════ */}
-      <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(0,70%) minmax(0,30%)" }}>
+      {/* ═══ ROW 2 — Map (70%) + Live Alerts (30%) ══════════════════════════ */}
+      <div className="grid gap-2" style={{ gridTemplateColumns: "minmax(0,70%) minmax(0,30%)", alignItems: "stretch" }}>
 
         {/* Map panel */}
         <Panel>
           <PanelHeader
             icon={MapPin}
             title="Threat Origin Map"
-            subtitle="Top-500 IP IOCs by severity · Mercator · Zoom with +/−"
+            subtitle="Top-200 IP IOCs by severity · Zoom with +/−"
             right={
-              <span className="text-[9px] font-mono tabular-nums" style={{ color: "rgba(34,211,238,0.5)" }}>
-                {deferredLoading ? "…" : `${geoPoints.length} IPs`}
+              <span className="text-[9px] font-mono tabular-nums" style={{ color: "rgba(34,211,238,0.45)" }}>
+                {mapLoading ? "…" : `${geoPoints.length} IPs`}
               </span>
             }
           />
           <div className="flex-1 p-0">
-            {deferredLoading
-              ? <Skeleton className="h-64 m-2 rounded" />
+            {mapLoading
+              ? (
+                <div
+                  className="flex flex-col items-center justify-center gap-2 m-2 rounded"
+                  style={{ height: 264, background: "rgba(7,13,24,0.6)", border: "1px solid rgba(34,211,238,0.06)" }}
+                >
+                  <MapPin className="w-5 h-5 text-slate-800" />
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-slate-700">
+                    Loading threat map…
+                  </span>
+                </div>
+              )
               : <GeoMap points={geoPoints} />
             }
           </div>
@@ -422,36 +519,39 @@ export default function DashboardPage() {
                   className="w-1.5 h-1.5 rounded-full"
                   style={{
                     background: "#22c55e",
-                    boxShadow: "0 0 6px rgba(34,197,94,0.9)",
-                    animation: "livePulse 2s infinite",
+                    boxShadow: "0 0 8px rgba(34,197,94,1)",
+                    animation: "status-pulse-ring 2s ease-out infinite",
                   }}
                 />
                 <Link
                   href="/search?severity_min=6.5"
                   className="text-[8px] uppercase tracking-wider font-mono flex items-center gap-0.5 transition-colors"
-                  style={{ color: "rgba(34,211,238,0.5)" }}
+                  style={{ color: "rgba(34,211,238,0.45)" }}
                 >
                   All <ArrowUpRight className="w-2.5 h-2.5" />
                 </Link>
               </div>
             }
           />
-          <div className="flex-1 overflow-y-auto" style={{ maxHeight: 420 }}>
+          <div className="soc-scroll flex-1 min-h-0 overflow-y-auto">
             {recentIOCs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-32 gap-2 text-xs text-slate-600">
+              <div className="flex flex-col items-center justify-center h-32 gap-2 text-xs text-slate-700">
                 <Shield className="w-6 h-6 opacity-20" />
                 No alerts
               </div>
             ) : (
               <div>
-                {recentIOCs.map((ioc) => {
+                {recentIOCs.map((ioc, i) => {
                   const truncated = ioc.value.length > 30 ? ioc.value.slice(0, 30) + "…" : ioc.value;
                   return (
                     <Link
                       key={ioc.id}
                       href={`/iocs/${ioc.id}`}
                       className="flex items-start gap-2 px-3 py-2 transition-colors group"
-                      style={{ borderBottom: "1px solid rgba(34,211,238,0.05)" }}
+                      style={{
+                        borderBottom: "1px solid rgba(34,211,238,0.04)",
+                        animation: `slide-in-left 0.25s ease-out ${i * 40}ms both`,
+                      }}
                     >
                       <SevDot score={ioc.severity} />
                       <div className="flex-1 min-w-0">
@@ -459,7 +559,7 @@ export default function DashboardPage() {
                           <SevBadge score={ioc.severity} />
                           <span
                             className="text-[8px] uppercase tracking-wider font-mono px-1 py-0.5 rounded"
-                            style={{ background: "rgba(34,211,238,0.07)", color: "#22d3ee80" }}
+                            style={{ background: "rgba(34,211,238,0.06)", color: "rgba(34,211,238,0.5)" }}
                           >
                             {ioc.type.replace("hash_", "")}
                           </span>
@@ -472,11 +572,11 @@ export default function DashboardPage() {
                           {truncated}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[8px] font-mono text-slate-600">
+                          <span className="text-[8px] font-mono text-slate-700">
                             {(ioc.severity ?? 0).toFixed(1)}
                           </span>
-                          <span className="text-[8px] font-mono" style={{ color: "rgba(148,163,184,0.3)" }}>·</span>
-                          <span className="text-[8px] font-mono text-slate-600">{formatRelativeTime(ioc.last_seen)}</span>
+                          <span className="text-[8px] font-mono text-slate-800">·</span>
+                          <span className="text-[8px] font-mono text-slate-700">{formatRelativeTime(ioc.last_seen)}</span>
                         </div>
                       </div>
                       <ArrowUpRight className="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-cyan-400 mt-0.5" />
@@ -489,7 +589,7 @@ export default function DashboardPage() {
         </Panel>
       </div>
 
-      {/* ═══ ROW 3 — Trend (33%) + Activity (33%) + Threat Actors (33%) ══ */}
+      {/* ═══ ROW 3 — Trend (33%) + Activity (33%) + Threat Actors (33%) ════ */}
       <div className="grid grid-cols-3 gap-2">
 
         {/* Trend chart */}
@@ -500,10 +600,10 @@ export default function DashboardPage() {
             subtitle="Last 7 days"
             right={
               <div className="text-right">
-                <div className="text-sm font-bold font-mono tabular-nums text-cyan-400 leading-none">
+                <div className="text-sm font-bold font-mono tabular-nums leading-none" style={{ color: "#22d3ee", textShadow: "0 0 8px rgba(34,211,238,0.4)" }}>
                   {trends.reduce((s, t) => s + t.count, 0).toLocaleString()}
                 </div>
-                <div className="text-[8px] uppercase tracking-wider text-slate-600 mt-0.5">this week</div>
+                <div className="text-[8px] uppercase tracking-wider text-slate-700 mt-0.5">this week</div>
               </div>
             }
           />
@@ -528,7 +628,7 @@ export default function DashboardPage() {
                 {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-8 rounded" />)}
               </div>
             ) : activity.length === 0 ? (
-              <div className="flex items-center justify-center h-20 text-xs text-slate-600">
+              <div className="flex items-center justify-center h-20 text-xs text-slate-700">
                 No activity yet.
               </div>
             ) : (
@@ -536,27 +636,35 @@ export default function DashboardPage() {
                 {activity.map((ev, i) => {
                   const sev = getSeverity(ev.severity);
                   const truncated = ev.ioc_value.length > 28 ? ev.ioc_value.slice(0, 28) + "…" : ev.ioc_value;
+                  const sevColor =
+                    sev.label === "Critical" ? "#ef4444" :
+                    sev.label === "High"     ? "#f97316" :
+                    sev.label === "Medium"   ? "#f59e0b" :
+                    sev.label === "Low"      ? "#3b82f6" : "#64748b";
                   return (
                     <Link
                       key={i}
                       href={`/iocs/${ev.ioc_id}`}
                       className="flex items-center gap-2 px-3 py-1.5 transition-colors group"
-                      style={{ borderBottom: "1px solid rgba(34,211,238,0.04)" }}
+                      style={{
+                        borderBottom: "1px solid rgba(34,211,238,0.04)",
+                        animation: `slide-in-left 0.25s ease-out ${i * 30}ms both`,
+                      }}
                     >
                       <SevDot score={ev.severity} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1 mb-0.5">
-                          <span className={`text-[7px] uppercase font-bold tracking-wider ${sev.textCls}`}>
+                          <span className="text-[7px] uppercase font-bold tracking-wider" style={{ color: sevColor }}>
                             {sev.label}
                           </span>
-                          <span className="text-[7px] text-slate-600">{ev.ioc_type}</span>
-                          <span className="text-[7px] text-slate-700">· {ev.feed_name}</span>
+                          <span className="text-[7px] text-slate-700">{ev.ioc_type}</span>
+                          <span className="text-[7px] text-slate-800">· {ev.feed_name}</span>
                         </div>
-                        <div className="font-mono text-[9px] truncate group-hover:underline text-cyan-300/80">
+                        <div className="font-mono text-[9px] truncate group-hover:underline" style={{ color: "#67e8f9" }}>
                           {truncated}
                         </div>
                       </div>
-                      <span className="text-[8px] font-mono text-slate-700 flex-shrink-0">
+                      <span className="text-[8px] font-mono text-slate-800 flex-shrink-0">
                         {formatRelativeTime(ev.ingested_at)}
                       </span>
                     </Link>
@@ -576,8 +684,8 @@ export default function DashboardPage() {
             right={
               <Link
                 href="/threat-actors"
-                className="text-[8px] uppercase tracking-wider font-mono flex items-center gap-0.5 transition-colors"
-                style={{ color: "rgba(34,211,238,0.5)" }}
+                className="text-[8px] uppercase tracking-wider font-mono flex items-center gap-0.5"
+                style={{ color: "rgba(34,211,238,0.45)" }}
               >
                 All <ArrowUpRight className="w-2.5 h-2.5" />
               </Link>
@@ -589,7 +697,7 @@ export default function DashboardPage() {
                 {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 rounded" />)}
               </div>
             ) : threatActors.length === 0 ? (
-              <div className="flex items-center justify-center h-16 text-xs text-slate-600">
+              <div className="flex items-center justify-center h-16 text-xs text-slate-700">
                 No threat actors found.
               </div>
             ) : (
@@ -601,12 +709,22 @@ export default function DashboardPage() {
                   i === 2 ? "#f59e0b" :
                              "#22d3ee";
                 return (
-                  <Link key={actor.id} href={`/threat-actors/${actor.id}`} className="block group">
+                  <Link
+                    key={actor.id}
+                    href={`/threat-actors/${actor.id}`}
+                    className="block group"
+                    style={{ animation: `slide-in-left 0.25s ease-out ${i * 50}ms both` }}
+                  >
                     <div className="flex items-center justify-between mb-0.5">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span
                           className="text-[8px] font-mono px-1 py-0.5 rounded flex-shrink-0"
-                          style={{ background: `${barColor}15`, color: barColor, border: `1px solid ${barColor}30` }}
+                          style={{
+                            background: `${barColor}12`,
+                            color: barColor,
+                            border: `1px solid ${barColor}28`,
+                            boxShadow: `0 0 5px ${barColor}20`,
+                          }}
                         >
                           {actor.mitre_id}
                         </span>
@@ -619,19 +737,19 @@ export default function DashboardPage() {
                       </div>
                       <span
                         className="text-[10px] font-mono font-bold tabular-nums flex-shrink-0 ml-2"
-                        style={{ color: barColor }}
+                        style={{ color: barColor, textShadow: `0 0 6px ${barColor}60` }}
                       >
                         {actor.linked_ioc_count.toLocaleString()}
                       </span>
                     </div>
-                    <div className="h-0.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+                    <div className="h-0.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.04)" }}>
                       <div
                         className="h-full rounded-full transition-all duration-700"
                         style={{ width: `${pct}%`, background: barColor, boxShadow: `0 0 6px ${barColor}60` }}
                       />
                     </div>
                     {actor.country && (
-                      <div className="text-[8px] text-slate-700 mt-0.5 font-mono">{actor.country}</div>
+                      <div className="text-[8px] text-slate-800 mt-0.5 font-mono">{actor.country}</div>
                     )}
                   </Link>
                 );

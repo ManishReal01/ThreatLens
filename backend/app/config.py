@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # SSLBL: public JSON feed, no API key — every 2h refresh
     sslbl_schedule_minutes: int = 120
 
+    # GeoIP Enricher: ip-api.com batch geocoding, no API key — every 2h
+    geoip_enricher_schedule_minutes: int = 120
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

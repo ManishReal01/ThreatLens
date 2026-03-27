@@ -47,10 +47,11 @@ function severityLabel(severity: number | null): string {
 }
 
 const FEED_LABELS: Record<string, string> = {
-  abuseipdb: "AbuseIPDB",
-  urlhaus: "URLhaus",
-  otx: "AlienVault OTX",
-  threatfox: "ThreatFox",
+  abuseipdb:    "AbuseIPDB",
+  urlhaus:      "URLhaus",
+  otx:          "AlienVault OTX",
+  threatfox:    "ThreatFox",
+  feodotracker: "Feodo Tracker",
 };
 
 export default function GeoMap({ points }: { points: GeoIPPoint[] }) {
@@ -64,7 +65,7 @@ export default function GeoMap({ points }: { points: GeoIPPoint[] }) {
     return (
       <div
         className="flex items-center justify-center text-xs"
-        style={{ height: 260, color: "var(--muted-foreground)" }}
+        style={{ height: 260, color: "#475569" }}
       >
         No geolocated IP indicators available.
       </div>
@@ -72,89 +73,86 @@ export default function GeoMap({ points }: { points: GeoIPPoint[] }) {
   }
 
   return (
-    <div className="relative w-full" style={{ background: "#070d18", borderRadius: "0.375rem", overflow: "hidden" }}>
+    <div className="relative w-full" style={{ background: "#070d18", borderRadius: "0 0 0.375rem 0.375rem", overflow: "hidden" }}>
       <style>{`
         @keyframes geoip-critical-pulse {
           0%   { r: 0;  opacity: 0.7; }
-          75%  { r: 12; opacity: 0;   }
-          100% { r: 12; opacity: 0;   }
+          75%  { r: 14; opacity: 0;   }
+          100% { r: 14; opacity: 0;   }
         }
-        .geoip-critical-ring {
-          animation: geoip-critical-pulse 2.4s ease-out infinite;
+        @keyframes geoip-radar-sweep {
+          0%   { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
-        .geoip-critical-ring-2 {
-          animation: geoip-critical-pulse 2.4s ease-out 1.2s infinite;
-        }
+        .geoip-critical-ring   { animation: geoip-critical-pulse 2.4s ease-out infinite; }
+        .geoip-critical-ring-2 { animation: geoip-critical-pulse 2.4s ease-out 1.2s infinite; }
       `}</style>
 
-      {/* Zoom controls */}
-      <div
-        className="absolute top-2 right-2 z-20 flex flex-col gap-0.5"
-        style={{ pointerEvents: "auto" }}
-      >
-        <button
-          onClick={() => setZoom((z) => Math.min(z * 1.4, 8))}
-          className="w-6 h-6 flex items-center justify-center text-xs font-bold rounded"
-          style={{
-            background: "rgba(7,13,24,0.85)",
-            border: "1px solid rgba(34,211,238,0.2)",
-            color: "#22d3ee",
-            cursor: "pointer",
-          }}
-          title="Zoom in"
-        >
-          +
-        </button>
-        <button
-          onClick={() => setZoom((z) => Math.max(z / 1.4, 0.5))}
-          className="w-6 h-6 flex items-center justify-center text-xs font-bold rounded"
-          style={{
-            background: "rgba(7,13,24,0.85)",
-            border: "1px solid rgba(34,211,238,0.2)",
-            color: "#22d3ee",
-            cursor: "pointer",
-          }}
-          title="Zoom out"
-        >
-          −
-        </button>
+      {/* ── Zoom controls ─────────────────────────────────────────────────── */}
+      <div className="absolute top-2 right-2 z-20 flex flex-col gap-0.5">
+        {[
+          { label: "+", title: "Zoom in",  onClick: () => setZoom((z) => Math.min(z * 1.4, 8)) },
+          { label: "−", title: "Zoom out", onClick: () => setZoom((z) => Math.max(z / 1.4, 0.5)) },
+        ].map(({ label, title, onClick }) => (
+          <button
+            key={label}
+            onClick={onClick}
+            title={title}
+            className="w-6 h-6 flex items-center justify-center text-xs font-bold rounded transition-colors"
+            style={{
+              background: "rgba(7,13,24,0.9)",
+              border: "1px solid rgba(34,211,238,0.2)",
+              color: "#22d3ee",
+              cursor: "pointer",
+              boxShadow: "0 0 6px rgba(34,211,238,0.1)",
+            }}
+          >
+            {label}
+          </button>
+        ))}
         {zoom !== 1.0 && (
           <button
             onClick={() => setZoom(1.0)}
+            title="Reset zoom"
             className="w-6 h-6 flex items-center justify-center rounded"
             style={{
-              background: "rgba(7,13,24,0.85)",
+              background: "rgba(7,13,24,0.9)",
               border: "1px solid rgba(34,211,238,0.1)",
               color: "#64748b",
               cursor: "pointer",
               fontSize: 8,
-              letterSpacing: "0.05em",
             }}
-            title="Reset zoom"
           >
             ⊙
           </button>
         )}
       </div>
 
+      {/* ── Map SVG ──────────────────────────────────────────────────────── */}
       <ComposableMap
         projection="geoMercator"
         projectionConfig={{ scale, center: [10, 20] }}
         style={{ width: "100%", height: "auto", background: "#070d18", display: "block" }}
       >
         <defs>
-          <filter id="geoip-glow-crit"   x="-100%" y="-100%" width="300%" height="300%">
+          <filter id="geoip-glow-crit" x="-100%" y="-100%" width="300%" height="300%">
             <feGaussianBlur stdDeviation="3" result="b"/>
             <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
-          <filter id="geoip-glow-high"   x="-80%" y="-80%" width="260%" height="260%">
+          <filter id="geoip-glow-high" x="-80%" y="-80%" width="260%" height="260%">
             <feGaussianBlur stdDeviation="2" result="b"/>
             <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
-          <filter id="geoip-glow-med"    x="-60%" y="-60%" width="220%" height="220%">
+          <filter id="geoip-glow-med" x="-60%" y="-60%" width="220%" height="220%">
             <feGaussianBlur stdDeviation="1.5" result="b"/>
             <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
+          {/* Radar sweep gradient */}
+          <radialGradient id="radar-beam" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#22d3ee" stopOpacity="0" />
+            <stop offset="85%" stopColor="#22d3ee" stopOpacity="0" />
+            <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.04" />
+          </radialGradient>
         </defs>
 
         <Geographies geography={GEO_URL}>
@@ -163,12 +161,12 @@ export default function GeoMap({ points }: { points: GeoIPPoint[] }) {
               <Geography
                 key={geo.rsmKey}
                 geography={geo}
-                fill="#0f172a"
-                stroke="rgba(34,211,238,0.09)"
+                fill="#0b1628"
+                stroke="rgba(34,211,238,0.07)"
                 strokeWidth={0.4}
                 style={{
                   default: { outline: "none" },
-                  hover:   { outline: "none", fill: "#0f172a" },
+                  hover:   { outline: "none", fill: "#0f1e36" },
                   pressed: { outline: "none" },
                 }}
               />
@@ -193,14 +191,12 @@ export default function GeoMap({ points }: { points: GeoIPPoint[] }) {
               }}
               onMouseLeave={() => setTooltip(null)}
             >
-              {/* Pulse rings — critical only */}
               {isCrit && (
                 <>
-                  <circle className="geoip-critical-ring"   fill="none" stroke={color} strokeWidth={0.6} strokeOpacity={0.6} style={{ pointerEvents: "none" }} />
-                  <circle className="geoip-critical-ring-2" fill="none" stroke={color} strokeWidth={0.6} strokeOpacity={0.4} style={{ pointerEvents: "none" }} />
+                  <circle className="geoip-critical-ring"   fill="none" stroke={color} strokeWidth={0.7} strokeOpacity={0.5} style={{ pointerEvents: "none" }} />
+                  <circle className="geoip-critical-ring-2" fill="none" stroke={color} strokeWidth={0.5} strokeOpacity={0.35} style={{ pointerEvents: "none" }} />
                 </>
               )}
-              {/* Core dot */}
               <circle
                 r={r}
                 fill={color}
@@ -216,22 +212,43 @@ export default function GeoMap({ points }: { points: GeoIPPoint[] }) {
         })}
       </ComposableMap>
 
-      {/* Tooltip */}
+      {/* ── Radar sweep overlay ──────────────────────────────────────────── */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "conic-gradient(from 0deg, transparent 330deg, rgba(34,211,238,0.04) 355deg, rgba(34,211,238,0.07) 360deg)",
+          animation: "geoip-radar-sweep 8s linear infinite",
+          transformOrigin: "center center",
+          mixBlendMode: "screen",
+        }}
+      />
+
+      {/* ── Dark vignette ─────────────────────────────────────────────────── */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "radial-gradient(ellipse at 50% 50%, transparent 45%, rgba(7,13,24,0.7) 80%, rgba(7,13,24,0.95) 100%)",
+        }}
+      />
+
+      {/* ── Tooltip ──────────────────────────────────────────────────────── */}
       {tooltip && (
         <div
           className="absolute z-50 pointer-events-none px-3 py-2 rounded-md text-xs"
           style={{
             left: tooltip.x + 14,
             top: tooltip.y - 14,
-            background: "rgba(2,6,23,0.96)",
-            border: "1px solid rgba(34,211,238,0.18)",
+            background: "rgba(2,6,23,0.97)",
+            border: "1px solid rgba(34,211,238,0.2)",
             color: "#e2e8f0",
             maxWidth: 230,
-            boxShadow: "0 6px 24px rgba(0,0,0,0.7)",
-            backdropFilter: "blur(8px)",
+            boxShadow: "0 6px 24px rgba(0,0,0,0.8), 0 0 12px rgba(34,211,238,0.05)",
+            backdropFilter: "blur(12px)",
           }}
         >
-          <div className="font-mono font-semibold text-cyan-400 truncate mb-1">{tooltip.point.value}</div>
+          <div className="font-mono font-semibold text-cyan-400 truncate mb-1" style={{ textShadow: "0 0 8px rgba(34,211,238,0.4)" }}>
+            {tooltip.point.value}
+          </div>
           <div className="flex items-center gap-1.5 mb-0.5">
             <span
               className="inline-block w-2 h-2 rounded-full flex-shrink-0"
@@ -241,20 +258,20 @@ export default function GeoMap({ points }: { points: GeoIPPoint[] }) {
               {severityLabel(tooltip.point.severity)}
             </span>
             {tooltip.point.severity !== null && (
-              <span className="text-slate-500">&nbsp;{tooltip.point.severity.toFixed(1)}</span>
+              <span className="text-slate-600">&nbsp;{tooltip.point.severity.toFixed(1)}</span>
             )}
           </div>
-          {tooltip.point.country && <div className="text-slate-400 text-[11px]">{tooltip.point.country}</div>}
-          <div className="text-slate-500 text-[11px] mt-0.5">
+          {tooltip.point.country && <div className="text-slate-500 text-[11px]">{tooltip.point.country}</div>}
+          <div className="text-slate-700 text-[11px] mt-0.5">
             {FEED_LABELS[tooltip.point.feed_source] ?? tooltip.point.feed_source}
           </div>
         </div>
       )}
 
-      {/* Legend */}
+      {/* ── Legend ──────────────────────────────────────────────────────── */}
       <div
-        className="flex items-center gap-4 px-3 py-1.5 flex-wrap"
-        style={{ borderTop: "1px solid rgba(34,211,238,0.07)" }}
+        className="flex items-center gap-3 px-3 py-1.5 flex-wrap"
+        style={{ borderTop: "1px solid rgba(34,211,238,0.07)", background: "rgba(7,13,24,0.6)" }}
       >
         {[
           { label: "Critical", color: "#ef4444" },
@@ -262,12 +279,17 @@ export default function GeoMap({ points }: { points: GeoIPPoint[] }) {
           { label: "Medium",   color: "#f59e0b" },
           { label: "Low",      color: "#3b82f6" },
         ].map(({ label, color }) => (
-          <div key={label} className="flex items-center gap-1.5 text-[10px] text-slate-500">
-            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: color, boxShadow: `0 0 4px ${color}80` }} />
-            {label}
+          <div key={label} className="flex items-center gap-1.5">
+            <span
+              className="w-2 h-2 rounded-full flex-shrink-0"
+              style={{ background: color, boxShadow: `0 0 5px ${color}80` }}
+            />
+            <span className="text-[9px] font-mono uppercase tracking-wider" style={{ color: `${color}bb` }}>
+              {label}
+            </span>
           </div>
         ))}
-        <div className="text-[10px] ml-auto tabular-nums text-slate-500">
+        <div className="text-[9px] font-mono ml-auto tabular-nums" style={{ color: "rgba(34,211,238,0.3)" }}>
           {points.length} IP{points.length !== 1 ? "s" : ""} plotted
         </div>
       </div>

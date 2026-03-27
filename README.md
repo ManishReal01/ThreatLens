@@ -1,101 +1,164 @@
-# ThreatLens 👁️
+# ThreatLens — Open Source Threat Intelligence Platform
 
-> Advanced SOC Threat Intelligence Platform
+![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat-square&logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=flat-square&logo=fastapi)
+![Next.js 14](https://img.shields.io/badge/Next.js-14-black?style=flat-square&logo=next.js)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)
+![License MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
-ThreatLens is a premium, full-stack security operations center (SOC) application for tracking, visualizing, and correlating Indicators of Compromise (IOCs) traversing the global threat landscape. It aggregates intelligence from AlienVault OTX, URLhaus, and AbuseIPDB, rendering powerful relationship graphs and scoring matrices inside a sleek dark-themed workspace tailored specifically for SOC analysts.
+> A unified SOC analyst dashboard aggregating free OSINT threat feeds into a single, searchable threat intelligence platform — built for security teams who can't afford commercial TI tooling.
 
----
-
-![Dashboard Preview Placeholder](/docs/dashboard-preview.png)
-*(Screenshot Placeholder)*
-
-## Features ✨
-
-* **Multi-Source Ingestion Engine**: Background Celery and Async schedulers fetching intelligence every hour across 3 independent adaptors.
-* **Weighted Confidence Scoring**: Dynamic evaluation merging base feed ratings with recency and multiplex source confirmations.
-* **Analyst Workspace**: Personal workspace isolation allowing private custom tags, editable notebooks, and global Watchlists per analyst.
-* **Interactive DAG Visualization**: Interactive topology maps generated through React Flow & Dagre computing relationships up to 3 hops deep natively in the browser.
-* **Data Exports**: Instantaneous sanitized JSON and CSV blob generation of intel datasets.
+<!-- Add screenshot here -->
 
 ---
 
-## Tech Stack 🚀
+## Features
 
-**Frontend**:
-- UI Library: React 18 / Next.js 14 (App Router)
-- Language: TypeScript
-- Data Visualization: `@xyflow/react` (React Flow), Dagre, Recharts
-- Styling: Tailwind CSS, `shadcn/ui`, `lucide-react`
-- Authentication: Supabase Auth SSR
-
-**Backend**:
-- API Framework: FastAPI (Python 3.12)
-- Engine: PostgreSQL / SQLAlchemy (Async ORM) / Alembic
-- Automation: APScheduler
-- Security: Supabase JWT validation, IDOR protection logic
+- ✅ **9+ Active Threat Feeds** — URLhaus, OTX, ThreatFox, CISA KEV, Feodo Tracker, MalwareBazaar, SSLBL, MITRE ATT&CK, VirusTotal enrichment
+- ✅ **SOC Command Center Dashboard** — Real-time threat map, live alerts, IOC ingest trends, and top threat actors
+- ✅ **IOC Search & Filtering** — Full-text search across 7 IOC types (IP, domain, URL, MD5, SHA1, SHA256, CVE) with severity filters
+- ✅ **Bulk Lookup** — Paste up to 100 IOCs for instant batch lookup with CSV export
+- ✅ **Severity Scoring** — Composite score weighted by feed confidence (50%), source count (25%), and recency (25%)
+- ✅ **Threat Actor Intelligence** — Full MITRE ATT&CK adversary group database with IOC correlation
+- ✅ **Analyst Workspace** — Per-IOC tags, notes, and watchlist for triage workflows
+- ✅ **GeoIP Threat Map** — Leaflet-powered world map showing IP IOC origins by severity
+- ✅ **IOC Reports** — PDF report generation per IOC for sharing and documentation
+- ✅ **Live Enrichment** — On-demand GeoIP, DNS, and VirusTotal/URLhaus enrichment per indicator
 
 ---
 
-## Setup & Local Deployment 🛠️
+## Tech Stack
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+ / `bun` package manager
-- PostgreSQL Database
-- Supabase Project (for Authentication)
-
-### 1. Backend Initialization
-
-1. Navigate to the `backend/` directory:
-   ```bash
-   cd backend
-   ```
-2. Create and source a virtual environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Define your environment parameters in `backend/.env`:
-   ```env
-   DATABASE_URL="postgresql+asyncpg://user:pass@localhost:5432/threatlens"
-   SUPABASE_URL="https://your-project.supabase.co"
-   SUPABASE_JWT_SECRET="your-jwt-secret"
-   ```
-5. Apply database migrations:
-   ```bash
-   alembic upgrade head
-   ```
-6. Run the FastAPI development server:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-
-### 2. Frontend Initialization
-
-1. Navigate to the `frontend/` directory (open a new terminal tab):
-   ```bash
-   cd frontend
-   ```
-2. Install Node dependencies (using bun for extreme speed, or npm):
-   ```bash
-   bun install
-   ```
-3. Define your environment parameters in `frontend/.env.local`:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
-   NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
-   ```
-4. Run the Next.js development server:
-   ```bash
-   bun run dev
-   ```
-
-**The ThreatLens UI is now actively running on `http://localhost:3000`.** Any API calls fetching payload shapes not hitting `/auth` are seamlessly proxied through `next.config.mjs` resolving strictly to `http://127.0.0.1:8000`.
+| Layer | Technology |
+|---|---|
+| Backend | FastAPI + Python, APScheduler |
+| ORM | SQLAlchemy async (`asyncpg`) |
+| Database | PostgreSQL (Supabase session pooler) |
+| Frontend | Next.js 14 (App Router), TypeScript, Tailwind CSS |
+| Maps | Leaflet.js via React-Leaflet |
+| Search | `pg_trgm` GIN indexes |
+| HTTP Client | `httpx` async with `tenacity` retry/backoff |
 
 ---
 
-*Phase 6 Completed - Security Core 2026*
+## Quick Start
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/your-username/threatlens.git
+cd threatlens
+```
+
+### 2. Configure environment
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Edit `backend/.env` and fill in:
+
+```env
+# Required
+DATABASE_URL=postgresql+asyncpg://user:pass@aws-0-region.pooler.supabase.com:5432/postgres
+
+# Optional — leave blank to disable that feed
+ABUSEIPDB_API_KEY=
+OTX_API_KEY=
+URLHAUS_API_KEY=
+VIRUSTOTAL_API_KEY=
+```
+
+> **Important:** Use the Supabase **session pooler** URL (`pooler.supabase.com`), not the direct connection URL.
+
+### 3. Run database migrations
+
+```bash
+cd backend
+pip install -r requirements.txt
+alembic upgrade head
+```
+
+### 4. Start the backend
+
+```bash
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 5. Start the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## Feed Sources
+
+| Feed | IOC Types | Auth Required |
+|---|---|---|
+| [URLhaus](https://urlhaus.abuse.ch/) | URL, Domain | API key (abuse.ch) |
+| [AlienVault OTX](https://otx.alienvault.com/) | IP, Domain, Hash, URL | API key |
+| [ThreatFox](https://threatfox.abuse.ch/) | IP, Domain, Hash, URL | API key (abuse.ch) |
+| [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) | CVE | None |
+| [MITRE ATT&CK](https://attack.mitre.org/) | Threat actor groups | None |
+| [Feodo Tracker](https://feodotracker.abuse.ch/) | IP (botnet C2) | None |
+| [MalwareBazaar](https://bazaar.abuse.ch/) | SHA256, MD5, SHA1 | None |
+| [SSLBL](https://sslbl.abuse.ch/) | SHA1 (SSL certs) | None |
+| [VirusTotal](https://www.virustotal.com/) | IP, Hash, URL (enrichment) | API key |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Next.js 14 Frontend (Port 3000)                        │
+│  Dashboard · IOC Search · Bulk Lookup · Threat Actors   │
+│  Analyst Workspace · GeoIP Map                          │
+└───────────────────┬─────────────────────────────────────┘
+                    │  REST API (CORS)
+┌───────────────────▼─────────────────────────────────────┐
+│  FastAPI Backend (Port 8000)                            │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │ IOC Router   │  │ Feed Router  │  │ Workspace    │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ APScheduler — feed ingestion jobs (hourly/daily) │   │
+│  │ URLhaus · OTX · ThreatFox · CISA KEV · Feodo     │   │
+│  │ MalwareBazaar · SSLBL · MITRE ATT&CK · VT        │   │
+│  └──────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ Normalization + Upsert pipeline                  │   │
+│  │ Canonicalize → NormalizedIOC → upsert_ioc()      │   │
+│  └──────────────────────────────────────────────────┘   │
+└───────────────────┬─────────────────────────────────────┘
+                    │  asyncpg (session pooler)
+┌───────────────────▼─────────────────────────────────────┐
+│  PostgreSQL (Supabase)                                  │
+│  iocs · ioc_sources · feed_runs · threat_actors         │
+│  tags · notes · watchlist_items                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Contributing
+
+Pull requests are welcome. For major changes, please open an issue first to discuss what you'd like to change.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
