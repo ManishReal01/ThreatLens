@@ -3,10 +3,15 @@ import math
 
 from pydantic import BaseModel
 
-FEED_CONFIDENCE_WEIGHT: float = 0.50
+FEED_CONFIDENCE_WEIGHT: float = 0.35
 SOURCE_COUNT_WEIGHT: float = 0.25
-RECENCY_WEIGHT: float = 0.25
-CURRENT_SCORE_VERSION: int = 2
+RECENCY_WEIGHT: float = 0.40
+CURRENT_SCORE_VERSION: int = 3
+
+# Severity band thresholds — must stay in sync with frontend utils.ts and iocs.py
+SEVERITY_CRITICAL: float = 8.0
+SEVERITY_HIGH: float = 6.5
+SEVERITY_MEDIUM: float = 4.0
 
 
 class SeverityResult(BaseModel):
@@ -22,10 +27,14 @@ def compute_severity(
     """Compute severity score in [0.0, 10.0] with exponential recency decay.
 
     Formula:
-        confidence_component  = raw_confidence * 10 * 0.50
+        confidence_component  = raw_confidence * 10 * 0.35
         source_count_component = min(log2(source_count+1)/log2(11), 1.0) * 10 * 0.25
-        recency_component      = exp(-0.008 * age_days) * 10 * 0.25
+        recency_component      = exp(-0.008 * age_days) * 10 * 0.40
         score                  = sum of components, rounded to 2 dp
+
+    Weight rationale: recency carries 40% so older IOCs decay to medium/low
+    naturally even at high confidence.  Fresh high-confidence multi-source IOCs
+    still reach critical.
     """
     confidence_component = raw_confidence * 10 * FEED_CONFIDENCE_WEIGHT
     source_component = (

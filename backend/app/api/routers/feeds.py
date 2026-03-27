@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/feeds", tags=["feeds"])
 
-_KNOWN_FEEDS: tuple[str, ...] = ("abuseipdb", "urlhaus", "otx", "threatfox", "cisa_kev", "mitre_attack")
+_KNOWN_FEEDS: tuple[str, ...] = (
+    "urlhaus", "otx", "threatfox", "cisa_kev", "mitre_attack",
+    "virustotal", "feodotracker", "malwarebazaar", "sslbl",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -124,11 +127,7 @@ async def _run_feed_worker(feed_name: str) -> None:
     """Run a feed worker in its own session (called from BackgroundTasks)."""
     logger.info("Manual trigger: starting %s feed run", feed_name)
     try:
-        if feed_name == "abuseipdb":
-            from app.feeds.abuseipdb import AbuseIPDBWorker
-
-            worker_cls = AbuseIPDBWorker
-        elif feed_name == "urlhaus":
+        if feed_name == "urlhaus":
             from app.feeds.urlhaus import URLhausWorker
 
             worker_cls = URLhausWorker
@@ -144,6 +143,22 @@ async def _run_feed_worker(feed_name: str) -> None:
             from app.feeds.mitre_attack import MITREAttackWorker
 
             worker_cls = MITREAttackWorker
+        elif feed_name == "virustotal":
+            from app.feeds.virustotal import VirusTotalWorker
+
+            worker_cls = VirusTotalWorker
+        elif feed_name == "feodotracker":
+            from app.feeds.feodotracker import FeodoTrackerWorker
+
+            worker_cls = FeodoTrackerWorker
+        elif feed_name == "malwarebazaar":
+            from app.feeds.malwarebazaar import MalwareBazaarWorker
+
+            worker_cls = MalwareBazaarWorker
+        elif feed_name == "sslbl":
+            from app.feeds.sslbl import SSLBLWorker
+
+            worker_cls = SSLBLWorker
         else:
             raise ValueError(f"Unknown feed: {feed_name}")
 

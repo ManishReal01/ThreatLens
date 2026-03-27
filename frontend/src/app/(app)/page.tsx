@@ -81,10 +81,15 @@ function Skeleton({ className = "" }: { className?: string }) {
 
 /* ─── Feed name map ──────────────────────────────────────────────────────── */
 const FEED_DISPLAY: Record<string, { label: string }> = {
-  abuseipdb: { label: "AbuseIPDB" },
-  urlhaus:   { label: "URLhaus" },
-  otx:       { label: "AlienVault OTX" },
-  threatfox: { label: "ThreatFox" },
+  urlhaus:      { label: "URLhaus" },
+  otx:          { label: "OTX" },
+  threatfox:    { label: "ThreatFox" },
+  cisa_kev:     { label: "CISA KEV" },
+  mitre_attack: { label: "MITRE ATT&CK" },
+  virustotal:   { label: "VirusTotal" },
+  feodotracker: { label: "Feodo" },
+  malwarebazaar:{ label: "MalwareBazaar" },
+  sslbl:        { label: "SSLBL" },
 };
 
 /* ─── Severity dot ───────────────────────────────────────────────────────── */
@@ -173,6 +178,7 @@ function PanelHeader({
 export default function DashboardPage() {
   const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [deferredLoading, setDeferredLoading] = useState(true);
   const [feeds, setFeeds] = useState<FeedHealth[]>([]);
   const [recentIOCs, setRecentIOCs] = useState<IOCListItem[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -185,29 +191,34 @@ export default function DashboardPage() {
   useEffect(() => {
     async function init() {
       try {
-        const [feedRes, recentRes, statsRes, geoRes, trendsRes, activityRes, actorsRes] = await Promise.all([
+        // Phase 1 — critical data: unblocks the page render immediately
+        const [feedRes, recentRes, statsRes] = await Promise.all([
           fetchApi("/api/feeds/health"),
-          fetchApi("/api/iocs?page_size=8&severity_min=7"),
+          fetchApi("/api/iocs?page_size=8&severity_min=6.5"),
           fetchApi("/api/stats"),
-          fetchApi("/api/stats/geoip").catch(() => []),
-          fetchApi("/api/stats/trends").catch(() => ({ trends: [] })),
-          fetchApi("/api/stats/activity").catch(() => ({ events: [] })),
-          fetchApi("/api/threat-actors?page_size=5").catch(() => ({ items: [] })),
         ]);
-
         setFeeds(feedRes?.feeds ?? []);
         setRecentIOCs(recentRes?.items ?? []);
         setStats(statsRes ?? null);
-        setGeoPoints(Array.isArray(geoRes) ? geoRes : []);
-        setTrends(trendsRes?.trends ?? []);
-        setActivity(activityRes?.events ?? []);
-        setThreatActors(actorsRes?.items ?? []);
       } catch (err) {
         console.error(err);
         setError("Could not reach the backend. Ensure the API is running at http://127.0.0.1:8000");
       } finally {
         setLoading(false);
       }
+
+      // Phase 2 — deferred data: loads in background after page is visible
+      Promise.all([
+        fetchApi("/api/stats/geoip").catch(() => []),
+        fetchApi("/api/stats/trends").catch(() => ({ trends: [] })),
+        fetchApi("/api/stats/activity").catch(() => ({ events: [] })),
+        fetchApi("/api/threat-actors?page_size=5").catch(() => ({ items: [] })),
+      ]).then(([geoRes, trendsRes, activityRes, actorsRes]) => {
+        setGeoPoints(Array.isArray(geoRes) ? geoRes : []);
+        setTrends(trendsRes?.trends ?? []);
+        setActivity(activityRes?.events ?? []);
+        setThreatActors(actorsRes?.items ?? []);
+      }).finally(() => setDeferredLoading(false));
     }
     init();
   }, []);
@@ -318,9 +329,16 @@ export default function DashboardPage() {
                   {label}
                 </span>
                 <span className="text-[9px] tabular-nums font-mono text-slate-500">
-                  {ok ? feed.total_iocs.toLocaleString() : "ERR"}
+                  {!ok ? "ERR"
+                    : feed.feed_name === "mitre_attack"
+                      ? `${(feed.last_iocs_fetched ?? 0).toLocaleString()} actors`
+                    : feed.feed_name === "virustotal"
+                      ? `${(feed.last_iocs_fetched ?? 0).toLocaleString()} enriched`
+                    : feed.total_iocs.toLocaleString()
+                  }
                 </span>
-                {ok && feed.last_iocs_new != null && feed.last_iocs_new > 0 && (
+                {ok && feed.feed_name !== "mitre_attack" && feed.feed_name !== "virustotal"
+                  && feed.last_iocs_new != null && feed.last_iocs_new > 0 && (
                   <span className="text-[8px] font-mono text-emerald-600">+{feed.last_iocs_new}</span>
                 )}
               </div>
@@ -377,15 +395,18 @@ export default function DashboardPage() {
           <PanelHeader
             icon={MapPin}
             title="Threat Origin Map"
-            subtitle="Top-100 IP IOCs by severity · Mercator · Zoom with +/−"
+            subtitle="Top-500 IP IOCs by severity · Mercator · Zoom with +/−"
             right={
               <span className="text-[9px] font-mono tabular-nums" style={{ color: "rgba(34,211,238,0.5)" }}>
-                {geoPoints.length} IPs
+                {deferredLoading ? "…" : `${geoPoints.length} IPs`}
               </span>
             }
           />
           <div className="flex-1 p-0">
-            <GeoMap points={geoPoints} />
+            {deferredLoading
+              ? <Skeleton className="h-64 m-2 rounded" />
+              : <GeoMap points={geoPoints} />
+            }
           </div>
         </Panel>
 
@@ -406,7 +427,7 @@ export default function DashboardPage() {
                   }}
                 />
                 <Link
-                  href="/search?severity_min=7"
+                  href="/search?severity_min=6.5"
                   className="text-[8px] uppercase tracking-wider font-mono flex items-center gap-0.5 transition-colors"
                   style={{ color: "rgba(34,211,238,0.5)" }}
                 >
@@ -487,7 +508,10 @@ export default function DashboardPage() {
             }
           />
           <div className="flex-1 px-2 pt-2 pb-1" style={{ minHeight: 160 }}>
-            <TrendChart trends={trends} />
+            {deferredLoading
+              ? <Skeleton className="h-32 rounded" />
+              : <TrendChart trends={trends} />
+            }
           </div>
         </Panel>
 
@@ -499,7 +523,11 @@ export default function DashboardPage() {
             subtitle="IOC ingestion events"
           />
           <div className="flex-1 overflow-y-auto" style={{ maxHeight: 200 }}>
-            {activity.length === 0 ? (
+            {deferredLoading ? (
+              <div className="px-3 py-2 space-y-2">
+                {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-8 rounded" />)}
+              </div>
+            ) : activity.length === 0 ? (
               <div className="flex items-center justify-center h-20 text-xs text-slate-600">
                 No activity yet.
               </div>
@@ -556,7 +584,11 @@ export default function DashboardPage() {
             }
           />
           <div className="flex-1 px-3 py-2 space-y-2.5" style={{ maxHeight: 200, overflowY: "auto" }}>
-            {threatActors.length === 0 ? (
+            {deferredLoading ? (
+              <div className="space-y-2">
+                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 rounded" />)}
+              </div>
+            ) : threatActors.length === 0 ? (
               <div className="flex items-center justify-center h-16 text-xs text-slate-600">
                 No threat actors found.
               </div>

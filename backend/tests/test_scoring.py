@@ -12,13 +12,13 @@ from app.normalization.scoring import (
 
 
 def test_weight_constants():
-    assert FEED_CONFIDENCE_WEIGHT == 0.50
+    assert FEED_CONFIDENCE_WEIGHT == 0.35
     assert SOURCE_COUNT_WEIGHT == 0.25
-    assert RECENCY_WEIGHT == 0.25
+    assert RECENCY_WEIGHT == 0.40
 
 
 def test_score_version_constant():
-    assert CURRENT_SCORE_VERSION == 2
+    assert CURRENT_SCORE_VERSION == 3
 
 
 def test_score_in_valid_range():
@@ -41,7 +41,7 @@ def test_recency_decays_with_age():
 def test_recency_near_zero_at_180_days():
     result = compute_severity(raw_confidence=1.0, source_count=10, age_days=180)
     # recency_component at 180 days: exp(-0.008*180) = exp(-1.44) ≈ 0.237
-    # Full recency_component = 0.237 * 10 * 0.25 ≈ 0.59 — much less than at age 0 (2.5)
+    # Full recency_component = 0.237 * 10 * 0.40 ≈ 0.95 — much less than at age 0 (4.0)
     result_age0 = compute_severity(raw_confidence=1.0, source_count=10, age_days=0)
     assert result.score < result_age0.score
 

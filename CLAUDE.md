@@ -223,18 +223,21 @@ Pass to `upsert_ioc(session, ioc)` which returns `(model, is_new: bool)`.
 
 | Feed | IOC Types | Auth | Schedule |
 |------|-----------|------|----------|
-| AbuseIPDB | ip | API key | 6h |
 | URLhaus | url, domain | API key (abuse.ch) | 1h |
 | AlienVault OTX | ip, domain, hash, url | API key | 2h |
 | ThreatFox | ip, domain, hash, url | API key (abuse.ch, same as URLhaus) | 6h |
 | MITRE ATT&CK | (techniques/tactics metadata) | None | 24h |
 | CISA KEV | cve | None | 24h |
+| VirusTotal | enrichment (ip, hash, url) | API key | 6h |
+| Feodo Tracker | ip (botnet C2) | None | 1h |
+| MalwareBazaar | hash_sha256, hash_md5, hash_sha1 | None | 1h |
+| SSLBL | hash_sha1 (SSL certs) | None | 2h |
 
 ---
 
 ## Current Phase
 
-**Phase 1 — Data Quality**: Adding CISA KEV, GreyNoise, and VirusTotal feed adapters. CISA KEV is complete. GreyNoise and VirusTotal are in progress.
+**Phase 1 — Data Quality**: Feed roster updated. VirusTotal enrichment active. Feodo Tracker, MalwareBazaar, and SSLBL added (all abuse.ch, no API key required).
 
 ---
 

@@ -13,21 +13,17 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:3000"
 
     # Feed API keys (empty string = feed disabled; worker skips if not configured)
-    abuseipdb_api_key: str = ""
     otx_api_key: str = ""
     # abuse.ch URLhaus now requires authentication (API key from https://abuse.ch/)
     urlhaus_api_key: str = ""
+    # VirusTotal Free API (https://www.virustotal.com/)
+    vt_api_key: str = ""
 
     # Feed schedule intervals (minutes)
-    # AbuseIPDB free tier: 1000 API calls/day → one bulk call every 6h = 4 calls/day
-    abuseipdb_schedule_minutes: int = 360
     # URLhaus: no auth, no documented rate limit → hourly polling is safe
     urlhaus_schedule_minutes: int = 60
     # OTX: generous free tier → 2-hour polling with delta queries
     otx_schedule_minutes: int = 120
-
-    # AbuseIPDB: days of history to request per run (free tier max: 30)
-    abuseipdb_days_back: int = 1
 
     # OTX: max pulses to fetch per page (pagination stops at "next": null)
     otx_pulse_limit: int = 20
@@ -45,9 +41,22 @@ class Settings(BaseSettings):
     # CISA KEV: public JSON feed, no API key — daily refresh
     cisa_kev_schedule_minutes: int = 1440
 
+    # VirusTotal Free: 4 req/min rate limit → 15s sleep per call — every 6h pass
+    vt_schedule_minutes: int = 360
+
+    # Feodo Tracker: public JSON feed, no API key — hourly refresh
+    feodotracker_schedule_minutes: int = 60
+
+    # MalwareBazaar: public API, no API key — hourly refresh
+    malwarebazaar_schedule_minutes: int = 60
+
+    # SSLBL: public JSON feed, no API key — every 2h refresh
+    sslbl_schedule_minutes: int = 120
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",
     )
 
 

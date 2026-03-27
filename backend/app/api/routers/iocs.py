@@ -80,10 +80,10 @@ async def get_stats(
     # Single pass: count each severity band with CASE/SUM to avoid 4 queries.
     band_result = await session.execute(
         select(
-            func.sum(sa.case((IOCModel.severity >= 8.5, 1), else_=0)).label("critical"),
-            func.sum(sa.case((sa.and_(IOCModel.severity >= 7, IOCModel.severity < 8.5), 1), else_=0)).label("high"),
-            func.sum(sa.case((sa.and_(IOCModel.severity >= 4, IOCModel.severity < 7), 1), else_=0)).label("medium"),
-            func.sum(sa.case((IOCModel.severity < 4, 1), else_=0)).label("low"),
+            func.sum(sa.case((IOCModel.severity >= 8.0, 1), else_=0)).label("critical"),
+            func.sum(sa.case((sa.and_(IOCModel.severity >= 6.5, IOCModel.severity < 8.0), 1), else_=0)).label("high"),
+            func.sum(sa.case((sa.and_(IOCModel.severity >= 4.0, IOCModel.severity < 6.5), 1), else_=0)).label("medium"),
+            func.sum(sa.case((IOCModel.severity < 4.0, 1), else_=0)).label("low"),
         )
     )
     band_row = band_result.one()
@@ -116,12 +116,12 @@ async def get_geoip_data(
     Coordinates are cached in the ``latitude``/``longitude`` columns on the
     iocs table so ip-api.com is only called once per unique IP address.
     """
-    # Fetch top 100 IP IOCs ordered by severity
+    # Fetch top 500 IP IOCs ordered by severity
     result = await session.execute(
         select(IOCModel)
         .where(IOCModel.type == "ip")
         .order_by(IOCModel.severity.desc().nullslast())
-        .limit(100)
+        .limit(500)
     )
     iocs = result.scalars().all()
 

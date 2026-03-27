@@ -1,5 +1,6 @@
 """Base feed worker: HTTP client, exponential backoff retry, feed run lifecycle."""
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -151,17 +152,24 @@ class BaseFeedWorker(ABC):
                 updated,
             )
 
-        except Exception as exc:
+        except (Exception, asyncio.CancelledError) as exc:
             logger.exception("%s run %s failed: %s", self.FEED_NAME, run_id, exc)
-            await session.rollback()
+            try:
+                await session.rollback()
+            except Exception:
+                pass
 
-            # Re-add feed_run to the session (rolled back above) to record the failure
+            # Re-add feed_run to the session (rolled back above) to record the failure.
+            # Also handles CancelledError (server shutdown) so a run record is always written.
             feed_run.status = "error"
-            feed_run.error_msg = str(exc)[:1000]
+            feed_run.error_msg = str(exc)[:1000] if str(exc) else type(exc).__name__
             feed_run.completed_at = datetime.now(timezone.utc)
             feed_run.consecutive_failure_count = (feed_run.consecutive_failure_count or 0) + 1
-            session.add(feed_run)
-            await session.commit()
+            try:
+                session.add(feed_run)
+                await session.commit()
+            except Exception:
+                pass  # best-effort — if commit fails the run record is lost, but we must re-raise
             raise
 
         return feed_run
@@ -188,9 +196,22 @@ class BaseFeedWorker(ABC):
                 logger.debug("%s %s", method.upper(), url)
                 response = await self.client.request(method, url, **kwargs)
                 if response.status_code == 429:
-                    retry_after = response.headers.get("Retry-After", "unknown")
+                    retry_after_raw = response.headers.get("Retry-After", "unknown")
+                    try:
+                        retry_secs = int(retry_after_raw)
+                        hrs, rem = divmod(retry_secs, 3600)
+                        mins = rem // 60
+                        retry_human = f"{hrs}h {mins}m" if hrs else f"{mins}m"
+                    except (ValueError, TypeError):
+                        retry_human = retry_after_raw
+                    logger.warning(
+                        "%s rate limited — quota exhausted. Retry-After: %ss (%s). "
+                        "Free tier feeds will resume automatically on the next scheduled run.",
+                        self.FEED_NAME, retry_after_raw, retry_human,
+                    )
                     raise RateLimitError(
-                        f"{self.FEED_NAME} rate limited (Retry-After: {retry_after})"
+                        f"{self.FEED_NAME} rate limited — retry after {retry_human} "
+                        f"(Retry-After: {retry_after_raw}s). Free tier quota exhausted."
                     )
                 response.raise_for_status()
                 return response

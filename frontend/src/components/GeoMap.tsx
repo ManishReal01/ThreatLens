@@ -22,27 +22,27 @@ interface TooltipState {
 
 function dotColor(severity: number | null): string {
   if (severity === null || severity === undefined) return "#94a3b8";
-  if (severity >= 8.5) return "#ef4444";
-  if (severity >= 7) return "#f97316";
-  if (severity >= 4) return "#f59e0b";
+  if (severity >= 8.0) return "#ef4444";
+  if (severity >= 6.5) return "#f97316";
+  if (severity >= 4.0) return "#f59e0b";
   return "#3b82f6";
 }
 
 function dotRadius(severity: number | null, zoom: number): number {
   const base =
     severity === null || severity === undefined ? 2 :
-    severity >= 8.5 ? 3.5 :
-    severity >= 7   ? 2.8 :
-    severity >= 4   ? 2.2 :
+    severity >= 8.0 ? 3.5 :
+    severity >= 6.5 ? 2.8 :
+    severity >= 4.0 ? 2.2 :
     1.8;
   return base / Math.sqrt(zoom);
 }
 
 function severityLabel(severity: number | null): string {
   if (severity === null || severity === undefined) return "Unknown";
-  if (severity >= 8.5) return "Critical";
-  if (severity >= 7) return "High";
-  if (severity >= 4) return "Medium";
+  if (severity >= 8.0) return "Critical";
+  if (severity >= 6.5) return "High";
+  if (severity >= 4.0) return "Medium";
   return "Low";
 }
 
@@ -179,8 +179,8 @@ export default function GeoMap({ points }: { points: GeoIPPoint[] }) {
         {points.map((pt, i) => {
           const color = dotColor(pt.severity);
           const r = dotRadius(pt.severity, zoom);
-          const isCrit = pt.severity !== null && pt.severity >= 8.5;
-          const isHigh = pt.severity !== null && pt.severity >= 7 && !isCrit;
+          const isCrit = pt.severity !== null && pt.severity >= 8.0;
+          const isHigh = pt.severity !== null && pt.severity >= 6.5 && !isCrit;
           const filterId = isCrit ? "geoip-glow-crit" : isHigh ? "geoip-glow-high" : "geoip-glow-med";
 
           return (

@@ -11,14 +11,6 @@ from app.db.session import AsyncSessionLocal
 logger = logging.getLogger(__name__)
 
 
-async def _run_abuseipdb(settings: Settings) -> None:
-    from app.feeds.abuseipdb import AbuseIPDBWorker
-
-    async with AbuseIPDBWorker(settings) as worker:
-        async with AsyncSessionLocal() as session:
-            await worker.run(session)
-
-
 async def _run_urlhaus(settings: Settings) -> None:
     from app.feeds.urlhaus import URLhausWorker
 
@@ -59,24 +51,44 @@ async def _run_cisa_kev(settings: Settings) -> None:
             await worker.run(session)
 
 
+async def _run_virustotal(settings: Settings) -> None:
+    from app.feeds.virustotal import VirusTotalWorker
+
+    logger.info("VirusTotal enrichment starting — VT configured: %s", bool(settings.vt_api_key))
+    async with VirusTotalWorker(settings) as worker:
+        async with AsyncSessionLocal() as session:
+            await worker.run(session)
+
+
+async def _run_feodotracker(settings: Settings) -> None:
+    from app.feeds.feodotracker import FeodoTrackerWorker
+
+    async with FeodoTrackerWorker(settings) as worker:
+        async with AsyncSessionLocal() as session:
+            await worker.run(session)
+
+
+async def _run_malwarebazaar(settings: Settings) -> None:
+    from app.feeds.malwarebazaar import MalwareBazaarWorker
+
+    async with MalwareBazaarWorker(settings) as worker:
+        async with AsyncSessionLocal() as session:
+            await worker.run(session)
+
+
+async def _run_sslbl(settings: Settings) -> None:
+    from app.feeds.sslbl import SSLBLWorker
+
+    async with SSLBLWorker(settings) as worker:
+        async with AsyncSessionLocal() as session:
+            await worker.run(session)
+
+
 def create_scheduler(settings: Settings) -> AsyncIOScheduler:
     """Return a configured AsyncIOScheduler (not yet started)."""
     scheduler = AsyncIOScheduler()
 
     now = datetime.now(timezone.utc)
-
-    scheduler.add_job(
-        _run_abuseipdb,
-        trigger="interval",
-        minutes=settings.abuseipdb_schedule_minutes,
-        kwargs={"settings": settings},
-        id="abuseipdb_feed",
-        name="AbuseIPDB Feed",
-        replace_existing=True,
-        max_instances=1,       # prevent overlap if a run takes longer than the interval
-        misfire_grace_time=300,
-        next_run_time=now,     # run immediately on startup
-    )
 
     scheduler.add_job(
         _run_urlhaus,
@@ -143,14 +155,71 @@ def create_scheduler(settings: Settings) -> AsyncIOScheduler:
         next_run_time=now,     # run immediately on startup
     )
 
+    scheduler.add_job(
+        _run_virustotal,
+        trigger="interval",
+        minutes=settings.vt_schedule_minutes,
+        kwargs={"settings": settings},
+        id="virustotal_feed",
+        name="VirusTotal Enrichment",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=300,
+        next_run_time=now,     # run immediately on startup
+    )
+
+    scheduler.add_job(
+        _run_feodotracker,
+        trigger="interval",
+        minutes=settings.feodotracker_schedule_minutes,
+        kwargs={"settings": settings},
+        id="feodotracker_feed",
+        name="Feodo Tracker Feed",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=300,
+        next_run_time=now,     # run immediately on startup
+    )
+
+    scheduler.add_job(
+        _run_malwarebazaar,
+        trigger="interval",
+        minutes=settings.malwarebazaar_schedule_minutes,
+        kwargs={"settings": settings},
+        id="malwarebazaar_feed",
+        name="MalwareBazaar Feed",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=300,
+        next_run_time=now,     # run immediately on startup
+    )
+
+    scheduler.add_job(
+        _run_sslbl,
+        trigger="interval",
+        minutes=settings.sslbl_schedule_minutes,
+        kwargs={"settings": settings},
+        id="sslbl_feed",
+        name="SSLBL Feed",
+        replace_existing=True,
+        max_instances=1,
+        misfire_grace_time=300,
+        next_run_time=now,     # run immediately on startup
+    )
+
     logger.info(
-        "Scheduler configured: AbuseIPDB every %dm, URLhaus every %dm, OTX every %dm, "
-        "ThreatFox every %dm, MITRE ATT&CK every %dm, CISA KEV every %dm",
-        settings.abuseipdb_schedule_minutes,
+        "Scheduler configured: URLhaus every %dm, OTX every %dm, "
+        "ThreatFox every %dm, MITRE ATT&CK every %dm, CISA KEV every %dm, "
+        "VirusTotal every %dm, Feodo Tracker every %dm, "
+        "MalwareBazaar every %dm, SSLBL every %dm",
         settings.urlhaus_schedule_minutes,
         settings.otx_schedule_minutes,
         settings.threatfox_schedule_minutes,
         settings.mitre_attack_schedule_minutes,
         settings.cisa_kev_schedule_minutes,
+        settings.vt_schedule_minutes,
+        settings.feodotracker_schedule_minutes,
+        settings.malwarebazaar_schedule_minutes,
+        settings.sslbl_schedule_minutes,
     )
     return scheduler
