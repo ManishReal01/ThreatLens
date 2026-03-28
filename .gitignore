@@ -51,3 +51,5 @@ test.db
 .tmp/
 tmp/
 bun/
+.planning/
+
