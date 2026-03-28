@@ -34,7 +34,6 @@ env/
 htmlcov/
 
 # Database
-test.db
 *.sqlite3
 *.db
 
@@ -47,14 +46,5 @@ test.db
 *.swp
 *.swo
 
-# Temporary directories
-.tmp/
-tmp/
-bun/
-.planning/
-
-# Claude Code tooling (internal use only)
-.claude/
-CLAUDE.md
+# Local config (not for publishing)
 .env.example
-research.md
