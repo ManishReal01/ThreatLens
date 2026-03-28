@@ -52,24 +52,19 @@ cd threatlens
 
 ### 2. Configure environment
 
-```bash
-cp backend/.env.example backend/.env
-```
-
-Edit `backend/.env` and fill in:
+Create `backend/.env` with the following (see [Environment Variables](#environment-variables) for full reference):
 
 ```env
 # Required
 DATABASE_URL=postgresql+asyncpg://user:pass@aws-0-region.pooler.supabase.com:5432/postgres
 
 # Optional — leave blank to disable that feed
-ABUSEIPDB_API_KEY=
 OTX_API_KEY=
 URLHAUS_API_KEY=
-VIRUSTOTAL_API_KEY=
+VT_API_KEY=
 ```
 
-> **Important:** Use the Supabase **session pooler** URL (`pooler.supabase.com`), not the direct connection URL.
+> **Important:** Use the Supabase **session pooler** URL (`pooler.supabase.com`), not the direct connection URL (`db.*.supabase.co`).
 
 ### 3. Run database migrations
 
@@ -144,6 +139,21 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 │  tags · notes · watchlist_items                         │
 └─────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## Environment Variables
+
+All variables live in `backend/.env`. Only `DATABASE_URL` is required; everything else defaults to disabled/empty.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | **Yes** | Supabase **session pooler** URL — must use `pooler.supabase.com:5432`, not the direct `db.*.supabase.co` host. Format: `postgresql+asyncpg://user:pass@aws-0-region.pooler.supabase.com:5432/postgres` |
+| `OTX_API_KEY` | No | [AlienVault OTX](https://otx.alienvault.com/) API key. Leave blank to disable OTX feed. |
+| `URLHAUS_API_KEY` | No | [abuse.ch](https://abuse.ch/) API key — shared by both URLhaus and ThreatFox feeds. Leave blank to disable both. |
+| `VT_API_KEY` | No | [VirusTotal](https://www.virustotal.com/) free API key. Leave blank to disable VT enrichment. |
+
+All other settings (schedule intervals, pagination limits, CORS origins) have sensible defaults and can be overridden in `.env` if needed — see `backend/app/config.py` for the full list.
 
 ---
 

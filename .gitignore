@@ -53,3 +53,7 @@ tmp/
 bun/
 .planning/
 
+# Claude Code tooling (internal use only)
+.claude/
+CLAUDE.md
+.env.example
