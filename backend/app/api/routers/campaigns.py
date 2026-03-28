@@ -244,7 +244,7 @@ async def get_campaign(
     sig_rows = await session.execute(
         text(
             "SELECT sig, COUNT(*) "
-            "FROM campaign_iocs, unnest(signal_types) AS sig "
+            "FROM campaign_iocs, json_array_elements_text(signal_types) AS sig "
             "WHERE campaign_id = :cid "
             "GROUP BY sig"
         ),

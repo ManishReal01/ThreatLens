@@ -31,7 +31,8 @@ _GENERIC_MALWARE_FAMILIES = {
 _MAX_SUBNET_GROUP = 100
 _MAX_COOCCURRENCE_GROUP = 50
 _MAX_TEMPORAL_GROUP = 30
-_MAX_MALWARE_GROUP = 200
+_MAX_MALWARE_GROUP = 20   # keep edges manageable; families with thousands of IOCs create noise
+_MAX_TTP_GROUP = 30       # per threat actor — actors with thousands of IOCs would explode BFS
 
 
 # ---------------------------------------------------------------------------
@@ -39,41 +40,64 @@ _MAX_MALWARE_GROUP = 200
 # ---------------------------------------------------------------------------
 
 async def signal_subnet_clustering(session: AsyncSession) -> List[Edge]:
-    """Connect IPs that share the same /24 subnet."""
+    """Connect IPs that share the same /24 subnet.
+
+    Quality filters applied:
+    - Skip subnets where ALL IPs came from a single feed (no cross-feed signal).
+    - Skip subnets with >50 IPs (too large = noise, not a real campaign).
+    """
     rows = await session.execute(
-        text("SELECT id::text, value FROM iocs WHERE type = 'ip' AND is_active = true")
+        text(
+            "SELECT i.id::text, i.value, s.feed_name "
+            "FROM iocs i "
+            "JOIN ioc_sources s ON s.ioc_id = i.id "
+            "WHERE i.type = 'ip' AND i.is_active = true"
+        )
     )
     records = rows.fetchall()
 
-    # Group by /24 subnet
-    subnet_groups: dict[bytes, list[str]] = defaultdict(list)
-    for row_id, value in records:
+    # Group by /24 subnet: key -> list of (ioc_id, feed_name)
+    subnet_groups: dict[bytes, list[tuple[str, str]]] = defaultdict(list)
+    seen_per_subnet: dict[bytes, set[str]] = defaultdict(set)  # deduplicate ioc_ids
+    for row_id, value, feed_name in records:
         try:
             addr = ipaddress.ip_address(value)
             if isinstance(addr, ipaddress.IPv6Address):
-                # Collapse IPv4-mapped IPv6
                 if addr.ipv4_mapped:
                     addr = addr.ipv4_mapped
                 else:
                     continue  # skip pure IPv6 for subnet clustering
-            # Key = first 3 octets (e.g. b'\xc0\xa8\x01')
+            # Key = first 3 octets — strictly /24
             key = addr.packed[:3]
-            subnet_groups[key].append(row_id)
+            if row_id not in seen_per_subnet[key]:
+                seen_per_subnet[key].add(row_id)
+                subnet_groups[key].append((row_id, feed_name))
         except ValueError:
             continue
 
     edges: List[Edge] = []
-    for key, ids in subnet_groups.items():
-        if len(ids) < 2:
+    for key, entries in subnet_groups.items():
+        if len(entries) < 2:
             continue
-        capped = ids[:_MAX_SUBNET_GROUP]
-        # Slightly higher confidence for denser subnets
-        density_bonus = min(0.15, len(capped) / 100)
+        # Skip subnets that are too large (noise)
+        if len(entries) > 50:
+            logger.debug(
+                "subnet_clustering: skipping /24 %s — %d IPs exceeds max 50",
+                ".".join(str(b) for b in key),
+                len(entries),
+            )
+            continue
+        # Skip if all IPs came from a single feed (single-feed clusters are not meaningful)
+        feeds_in_subnet = {feed for _, feed in entries}
+        if len(feeds_in_subnet) < 2:
+            continue
+        ids = [ioc_id for ioc_id, _ in entries]
+        density_bonus = min(0.15, len(ids) / 100)
         weight = round(0.7 + density_bonus, 3)
-        for a, b in itertools.combinations(capped, 2):
+        for a, b in itertools.combinations(ids, 2):
             edges.append((a, b, "subnet_clustering", weight))
 
-    logger.info("subnet_clustering: %d edges from %d IPs", len(edges), len(records))
+    logger.info("subnet_clustering: %d edges from %d IPs", len(edges), len(seen_per_subnet))
     return edges
 
 
@@ -110,6 +134,10 @@ async def signal_cooccurrence(session: AsyncSession) -> List[Edge]:
 
     edges: List[Edge] = []
     for (a, b), shared_count in pair_runs.items():
+        # Require co-occurrence in ≥2 separate feed runs to avoid pairing every
+        # IOC in the same batch (same-batch co-occurrence is not a campaign signal).
+        if shared_count < 2:
+            continue
         # More shared runs → higher confidence, capped at 0.9
         weight = min(0.9, 0.6 + shared_count * 0.1)
         edges.append((a, b, "cooccurrence", round(weight, 3)))
@@ -266,7 +294,7 @@ async def signal_ttp_overlap(session: AsyncSession) -> List[Edge]:
     for actor_id, ids in actor_groups.items():
         if len(ids) < 2:
             continue
-        unique_ids = list(dict.fromkeys(ids))
+        unique_ids = list(dict.fromkeys(ids))[:_MAX_TTP_GROUP]
         for a, b in itertools.combinations(unique_ids, 2):
             edges.append((a, b, "ttp_overlap", 0.8))
 

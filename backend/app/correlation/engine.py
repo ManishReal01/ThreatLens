@@ -6,6 +6,7 @@ Usage:
     print(result.campaigns_found, result.iocs_clustered)
 """
 
+import hashlib
 import logging
 import time
 import uuid
@@ -42,11 +43,13 @@ class CorrelationEngine:
 
     def __init__(
         self,
-        min_cluster_size: int = 3,
+        min_cluster_size: int = 5,
         min_confidence: float = 0.4,
+        max_cluster_size: int = 500,
     ):
         self.min_cluster_size = min_cluster_size
         self.min_confidence = min_confidence
+        self.max_cluster_size = max_cluster_size
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -104,8 +107,12 @@ class CorrelationEngine:
             logger.info("Signal %s contributed %d edges", name, count)
 
         # 3. Compute combined weight: 1 - Π(1 - w_i)  (probabilistic OR)
+        # Only keep edges confirmed by ≥2 different signals — single-signal edges
+        # are too noisy and create spurious BFS bridges between unrelated clusters.
         edges: dict[tuple[str, str], float] = {}
         for key, signals in edge_signals.items():
+            if len(signals) < 2:
+                continue
             prob_none = 1.0
             for w in signals.values():
                 prob_none *= (1.0 - w)
@@ -146,10 +153,22 @@ class CorrelationEngine:
 
         logger.info("Found %d connected components", len(components))
 
-        # 5. Filter by min size
-        clusters = [c for c in components if len(c) >= self.min_cluster_size]
+        # 5. Filter by min and max size
+        too_large = [c for c in components if len(c) > self.max_cluster_size]
+        clusters = [
+            c for c in components
+            if self.min_cluster_size <= len(c) <= self.max_cluster_size
+        ]
+        if too_large:
+            logger.warning(
+                "%d oversized clusters discarded (>%d IOCs): sizes %s",
+                len(too_large),
+                self.max_cluster_size,
+                [len(c) for c in too_large],
+            )
         logger.info(
-            "%d clusters pass min_cluster_size=%d", len(clusters), self.min_cluster_size
+            "%d clusters pass size filter [%d, %d]",
+            len(clusters), self.min_cluster_size, self.max_cluster_size,
         )
 
         if not clusters:
@@ -332,8 +351,12 @@ class CorrelationEngine:
             cluster_ioc_ids, ioc_meta, ioc_sources_meta, first_seen
         )
 
-        # --- Upsert campaigns row (match by sorted IOC fingerprint) ---
-        fingerprint = ",".join(sorted(cluster_ioc_ids))
+        # --- Upsert campaigns row (match by IOC fingerprint) ---
+        # Use SHA-256 of sorted IOC IDs so the fingerprint is stable across
+        # processes (Python's built-in hash() is randomised per-process).
+        fingerprint = hashlib.sha256(
+            ",".join(sorted(cluster_ioc_ids)).encode()
+        ).hexdigest()
 
         existing = await session.execute(
             text(
