@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard, Search, Bookmark, ShieldHalf,
-  Radio, ChevronRight, Users, Layers,
+  Radio, ChevronRight, Users, Layers, Network,
 } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -29,6 +29,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     { href: "/",                    label: "Overview",       icon: LayoutDashboard, desc: "System status" },
     { href: "/search",              label: "IOC Search",     icon: Search,           desc: "Find indicators" },
     { href: "/threat-actors",       label: "Threat Actors",  icon: Users,            desc: "MITRE ATT&CK" },
+    { href: "/campaigns",           label: "Campaigns",      icon: Network,          desc: "Correlation clusters" },
     { href: "/bulk-lookup",         label: "Bulk Lookup",    icon: Layers,           desc: "Batch IOC search" },
     { href: "/workspace/watchlist", label: "Watchlist",      icon: Bookmark,         desc: "Monitored IOCs" },
   ];

@@ -4,6 +4,7 @@ from app.models.relationship import IOCRelationshipModel
 from app.models.feed_run import FeedRunModel
 from app.models.workspace import TagModel, NoteModel, WatchlistModel
 from app.models.threat_actor import ThreatActorModel, ThreatActorIOCLinkModel
+from app.models.campaign import CampaignModel, CampaignIOCModel
 
 __all__ = [
     "IOCModel",
@@ -15,4 +16,6 @@ __all__ = [
     "WatchlistModel",
     "ThreatActorModel",
     "ThreatActorIOCLinkModel",
+    "CampaignModel",
+    "CampaignIOCModel",
 ]

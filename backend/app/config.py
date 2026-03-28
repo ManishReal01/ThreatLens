@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # GeoIP Enricher: ip-api.com batch geocoding, no API key — every 2h
     geoip_enricher_schedule_minutes: int = 120
 
+    # Correlation Engine: cluster IOCs into campaigns — every 6h
+    # Uses a 5-minute startup delay so feeds have time to ingest first
+    correlation_schedule_minutes: int = 360
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -6,7 +6,7 @@ import { fetchApi } from "@/lib/api.client";
 import { getSeverity, formatRelativeTime } from "@/lib/utils";
 import {
   Activity, RefreshCw, Zap, Shield, Database,
-  AlertTriangle, ArrowUpRight, MapPin, Radio, Users,
+  AlertTriangle, ArrowUpRight, MapPin, Radio, Users, Network,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -87,6 +87,22 @@ interface ThreatActor {
   motivations: string[];
 }
 
+interface Campaign {
+  id: string;
+  name: string;
+  confidence: number | null;
+  ioc_count: number;
+  primary_signal: string | null;
+  first_seen: string | null;
+  last_seen: string | null;
+}
+
+interface CampaignStats {
+  total_campaigns: number;
+  total_clustered_iocs: number;
+  avg_confidence: number | null;
+}
+
 /* ─── Skeleton ───────────────────────────────────────────────────────────── */
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`skeleton ${className}`} />;
@@ -164,7 +180,7 @@ function PanelHeader({
   subtitle,
   right,
 }: {
-  icon?: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   title: string;
   subtitle?: string;
   right?: React.ReactNode;
@@ -209,7 +225,10 @@ export default function DashboardPage() {
   const [trends, setTrends] = useState<TrendPoint[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [threatActors, setThreatActors] = useState<ThreatActor[]>([]);
+  const [topCampaigns, setTopCampaigns] = useState<Campaign[]>([]);
+  const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Animated stat counters
   const [displayStats, setDisplayStats] = useState({ total: 0, critical: 0, high: 0, medium: 0 });
@@ -277,14 +296,18 @@ export default function DashboardPage() {
         fetchApi("/api/stats/trends").catch(() => ({ trends: [] })),
         fetchApi("/api/stats/activity").catch(() => ({ events: [] })),
         fetchApi("/api/threat-actors?page_size=5").catch(() => ({ items: [] })),
-      ]).then(([trendsRes, activityRes, actorsRes]) => {
+        fetchApi("/api/campaigns?page_size=3&status=active").catch(() => ({ items: [] })),
+        fetchApi("/api/campaigns/stats").catch(() => null),
+      ]).then(([trendsRes, activityRes, actorsRes, campaignsRes, campStatsRes]) => {
         setTrends(trendsRes?.trends ?? []);
         setActivity(activityRes?.events ?? []);
         setThreatActors(actorsRes?.items ?? []);
+        setTopCampaigns(campaignsRes?.items ?? []);
+        setCampaignStats(campStatsRes ?? null);
       }).finally(() => setDeferredLoading(false));
     }
     init();
-  }, []);
+  }, [retryCount]);
 
   const handleSync = async (feedName: string) => {
     setSyncing(true);
@@ -301,6 +324,14 @@ export default function DashboardPage() {
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
           {error}
         </div>
+        <button
+          onClick={() => { setError(null); setLoading(true); setRetryCount(n => n + 1); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] uppercase tracking-wider font-mono transition-all"
+          style={{ background: "rgba(34,211,238,0.06)", border: "1px solid rgba(34,211,238,0.2)", color: "#22d3ee" }}
+        >
+          <RefreshCw className="w-3 h-3" />
+          Retry
+        </button>
       </div>
     );
   }
@@ -444,10 +475,11 @@ export default function DashboardPage() {
         {stats && (
           <div className="relative z-10 flex items-center gap-1.5 flex-shrink-0 flex-wrap">
             {[
-              { label: "Total",    value: displayStats.total,    color: "#22d3ee", icon: Database,      animation: undefined },
-              { label: "Critical", value: displayStats.critical, color: "#ef4444", icon: AlertTriangle, animation: criticalCount > 0 ? "crit-pulse 1.6s ease-in-out infinite" : undefined },
-              { label: "High",     value: displayStats.high,     color: "#f97316", icon: Zap,           animation: undefined },
-              { label: "Medium",   value: displayStats.medium,   color: "#f59e0b", icon: Shield,        animation: undefined },
+              { label: "Total",     value: displayStats.total,    color: "#22d3ee", icon: Database,      animation: undefined },
+              { label: "Critical",  value: displayStats.critical, color: "#ef4444", icon: AlertTriangle, animation: criticalCount > 0 ? "crit-pulse 1.6s ease-in-out infinite" : undefined },
+              { label: "High",      value: displayStats.high,     color: "#f97316", icon: Zap,           animation: undefined },
+              { label: "Medium",    value: displayStats.medium,   color: "#f59e0b", icon: Shield,        animation: undefined },
+              { label: "Campaigns", value: campaignStats?.total_campaigns ?? 0, color: "#a78bfa", icon: Network, animation: undefined },
             ].map(({ label, value, color, icon: Icon, animation }) => (
               <div
                 key={label}
@@ -758,6 +790,65 @@ export default function DashboardPage() {
           </div>
         </Panel>
       </div>
+
+      {/* ═══ ROW 4 — Top Campaigns ═══════════════════════════════════════════ */}
+      <Panel>
+        <PanelHeader
+          icon={Network}
+          title="Top Campaigns"
+          subtitle="Correlation clusters by IOC count"
+          right={
+            <Link href="/campaigns" className="text-[8px] uppercase tracking-wider font-mono flex items-center gap-0.5" style={{ color: "rgba(34,211,238,0.45)" }}>
+              All <ArrowUpRight className="w-2.5 h-2.5" />
+            </Link>
+          }
+        />
+        <div className="px-3 py-2">
+          {deferredLoading ? (
+            <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-8 rounded" />)}</div>
+          ) : topCampaigns.length === 0 ? (
+            <div className="flex items-center justify-center h-16 gap-2 text-xs text-slate-700">
+              <Network className="w-4 h-4 opacity-20" />
+              No campaigns yet — engine runs every 6h
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {topCampaigns.map((c) => {
+                const conf = c.confidence ?? 0;
+                const confColor = conf >= 0.75 ? "#ef4444" : conf >= 0.5 ? "#f97316" : "#f59e0b";
+                const SIGNAL_LABELS: Record<string, string> = {
+                  subnet_clustering: "Subnet", cooccurrence: "Co-occur",
+                  malware_family: "Malware", temporal_clustering: "Temporal", ttp_overlap: "TTP",
+                };
+                return (
+                  <Link key={c.id} href={`/campaigns/${c.id}`}
+                    className="group p-2.5 rounded-lg transition-all"
+                    style={{ background: "rgba(34,211,238,0.03)", border: "1px solid rgba(34,211,238,0.08)" }}
+                  >
+                    <div className="font-mono text-[10px] font-bold text-slate-300 truncate group-hover:text-cyan-300 mb-1.5" title={c.name}>{c.name}</div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        <div className="h-full rounded-full" style={{ width: `${conf * 100}%`, background: confColor, boxShadow: `0 0 4px ${confColor}` }} />
+                      </div>
+                      <span className="text-[9px] font-mono tabular-nums" style={{ color: confColor }}>{(conf * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[8px] font-mono px-1 py-0.5 rounded" style={{ background: "rgba(34,211,238,0.06)", color: "rgba(34,211,238,0.6)", border: "1px solid rgba(34,211,238,0.12)" }}>
+                        {c.ioc_count} IOCs
+                      </span>
+                      {c.primary_signal && (
+                        <span className="text-[8px] font-mono px-1 py-0.5 rounded" style={{ background: "rgba(167,139,250,0.08)", color: "rgba(167,139,250,0.7)", border: "1px solid rgba(167,139,250,0.15)" }}>
+                          {SIGNAL_LABELS[c.primary_signal] ?? c.primary_signal}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Panel>
 
     </div>
   );

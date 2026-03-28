@@ -260,3 +260,73 @@ class ActivityEvent(BaseModel):
 
 class ActivityResponse(BaseModel):
     events: list[ActivityEvent]
+
+
+# ---------------------------------------------------------------------------
+# Campaign schemas
+# ---------------------------------------------------------------------------
+
+
+class CampaignIOCItem(BaseModel):
+    id: uuid.UUID
+    value: str
+    type: str
+    severity: Optional[float]
+    signal_types: list[str]
+    confidence: Optional[float]
+
+
+class CampaignListItem(BaseModel):
+    id: uuid.UUID
+    name: str
+    confidence: Optional[float]
+    ioc_count: int
+    status: str
+    primary_signal: Optional[str]
+    first_seen: Optional[datetime]
+    last_seen: Optional[datetime]
+    techniques: list[dict[str, Any]]
+    threat_actor_ids: list[str]
+    created_at: datetime
+
+
+class CampaignDetail(BaseModel):
+    id: uuid.UUID
+    name: str
+    description: Optional[str]
+    confidence: Optional[float]
+    ioc_count: int
+    status: str
+    primary_signal: Optional[str]
+    first_seen: Optional[datetime]
+    last_seen: Optional[datetime]
+    techniques: list[dict[str, Any]]
+    threat_actor_ids: list[str]
+    created_at: datetime
+    updated_at: datetime
+    # Enriched fields
+    top_iocs: list[CampaignIOCItem]
+    signal_breakdown: dict[str, int]
+    linked_actors: list[dict[str, Any]]
+
+
+class PaginatedCampaignResponse(BaseModel):
+    items: list[CampaignListItem]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+
+
+class CampaignStats(BaseModel):
+    total_campaigns: int
+    total_clustered_iocs: int
+    avg_confidence: Optional[float]
+    by_signal_type: dict[str, int]
+    active_campaigns: int
+    archived_campaigns: int
+
+
+class CampaignRunResponse(BaseModel):
+    status: str
+    message: str

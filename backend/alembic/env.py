@@ -7,7 +7,7 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import pool
 
 from app.config import settings
@@ -24,6 +24,8 @@ from app.models import (
     WatchlistModel,
     ThreatActorModel,
     ThreatActorIOCLinkModel,
+    CampaignModel,
+    CampaignIOCModel,
 )
 
 # Alembic Config object, providing access to the .ini file
@@ -68,10 +70,13 @@ def do_run_migrations(connection):
 
 async def run_async_migrations() -> None:
     """Run migrations using an async engine (asyncpg driver)."""
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connectable = create_async_engine(
+        settings.database_url,
         poolclass=pool.NullPool,
+        connect_args={
+            "statement_cache_size": 0,
+            "server_settings": {"statement_timeout": "0"},
+        },
     )
 
     async with connectable.connect() as connection:

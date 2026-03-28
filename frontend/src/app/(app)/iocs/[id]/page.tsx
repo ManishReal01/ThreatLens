@@ -723,7 +723,7 @@ export default function IOCDetailPage({ params }: { params: { id: string } }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.sources.map((src, i) => (
+                  {data.sources.map((src) => (
                     <tr
                       key={src.id}
                       className="transition-colors"
