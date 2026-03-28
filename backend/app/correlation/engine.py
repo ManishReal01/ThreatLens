@@ -291,13 +291,50 @@ class CorrelationEngine:
         # --- Cluster stats ---
         cluster_set = set(cluster_ioc_ids)
 
-        # Average edge weight within this cluster
-        cluster_edges = [
-            w for (a, b), w in edges.items()
-            if a in cluster_set and b in cluster_set
-        ]
+        # --- Confidence: weighted quality score ---
+        # Which signals fired for this cluster?
+        _SIGNAL_WEIGHTS = {
+            "cooccurrence":        0.90,
+            "malware_family":      0.85,
+            "ttp_overlap":         0.80,
+            "subnet_clustering":   0.70,
+            "temporal_clustering": 0.50,
+        }
+        fired_signals: set[str] = set()
+        for (a, b), sigs in edge_signals.items():
+            if a in cluster_set and b in cluster_set:
+                fired_signals.update(sigs.keys())
+        # Normalise against the sum of the two strongest signals (1.75) so that
+        # a cluster firing both top signals scores near 1.0, while a weak 2-signal
+        # cluster scores around 0.65-0.77.  Scores beyond 1.0 are capped.
+        _max_possible = sorted(_SIGNAL_WEIGHTS.values(), reverse=True)[:2]
+        _max_possible_sum = sum(_max_possible)  # 0.90 + 0.85 = 1.75
+        signal_score = min(
+            sum(_SIGNAL_WEIGHTS.get(s, 0.5) for s in fired_signals) / _max_possible_sum,
+            1.0,
+        )
+
+        # Cluster size component — 20+ IOCs = full score
+        cluster_size_score = min(len(cluster_ioc_ids) / 20.0, 1.0)
+
+        # Cross-feed diversity — 3+ distinct feed names = full score
+        unique_feeds: set[str] = set()
+        for ioc_id in cluster_ioc_ids:
+            for src in ioc_sources_meta.get(ioc_id, []):
+                if src.get("feed_name"):
+                    unique_feeds.add(src["feed_name"])
+        cross_feed_score = min(len(unique_feeds) / 3.0, 1.0)
+
+        # Actor linkage — any known actor linked = full score
+        has_actors = any(bool(actor_meta.get(ioc_id)) for ioc_id in cluster_ioc_ids)
+        actor_link_score = 1.0 if has_actors else 0.0
+
         avg_confidence = round(
-            sum(cluster_edges) / len(cluster_edges) if cluster_edges else 0.5, 4
+            signal_score     * 0.40
+            + cluster_size_score * 0.25
+            + cross_feed_score   * 0.20
+            + actor_link_score   * 0.15,
+            4,
         )
 
         # Dominant signal
