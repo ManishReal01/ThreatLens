@@ -240,28 +240,28 @@ async def get_campaign(
         for r in ioc_rows.fetchall()
     ]
 
-    # Signal breakdown — count IOCs per signal
+    # Signal breakdown — aggregate in SQL to avoid loading all rows into Python
     sig_rows = await session.execute(
         text(
-            "SELECT signal_types FROM campaign_iocs WHERE campaign_id = :cid"
+            "SELECT sig, COUNT(*) "
+            "FROM campaign_iocs, unnest(signal_types) AS sig "
+            "WHERE campaign_id = :cid "
+            "GROUP BY sig"
         ),
         {"cid": campaign_id},
     )
-    signal_breakdown: dict[str, int] = {}
-    for (sig_list,) in sig_rows.fetchall():
-        for sig in (sig_list or []):
-            signal_breakdown[sig] = signal_breakdown.get(sig, 0) + 1
+    signal_breakdown: dict[str, int] = {row[0]: int(row[1]) for row in sig_rows.fetchall()}
 
     # Linked threat actors
     actor_ids = c[10] or []
     linked_actors: list[dict] = []
     if actor_ids:
-        id_list = ", ".join(f"'{aid}'" for aid in actor_ids)
         actor_rows = await session.execute(
             text(
-                f"SELECT id, name, mitre_id, country, motivations, techniques "
-                f"FROM threat_actors WHERE id::text IN ({id_list})"
-            )
+                "SELECT id, name, mitre_id, country, motivations, techniques "
+                "FROM threat_actors WHERE id = ANY(:ids)"
+            ),
+            {"ids": actor_ids},
         )
         linked_actors = [
             {

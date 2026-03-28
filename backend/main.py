@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
 from app.api.routers import feeds, iocs
 from app.api.routers.iocs import stats_router
@@ -42,6 +43,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # CORS — set ALLOWED_ORIGINS in .env (comma-separated) for production
 app.add_middleware(

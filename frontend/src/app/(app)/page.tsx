@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { fetchApi } from "@/lib/api.client";
 import { getSeverity, formatRelativeTime } from "@/lib/utils";
@@ -309,6 +309,9 @@ export default function DashboardPage() {
     init();
   }, [retryCount]);
 
+  const criticalCount = useMemo(() => stats?.iocs_by_severity?.critical ?? 0, [stats]);
+  const maxActorCount = useMemo(() => Math.max(...threatActors.map((a) => a.linked_ioc_count), 1), [threatActors]);
+
   const handleSync = async (feedName: string) => {
     setSyncing(true);
     try {
@@ -353,9 +356,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const criticalCount = stats?.iocs_by_severity?.critical ?? 0;
-  const maxActorCount = Math.max(...threatActors.map((a) => a.linked_ioc_count), 1);
 
   return (
     <div className="space-y-2 animate-in fade-in duration-400">
