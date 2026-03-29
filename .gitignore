@@ -46,5 +46,3 @@ htmlcov/
 *.swp
 *.swo
 
-# Local config (not for publishing)
-.env.example

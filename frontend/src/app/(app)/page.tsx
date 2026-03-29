@@ -229,6 +229,8 @@ export default function DashboardPage() {
   const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [feedsStale, setFeedsStale] = useState(false);
+  const [recentStale, setRecentStale] = useState(false);
 
   // Animated stat counters
   const [displayStats, setDisplayStats] = useState({ total: 0, critical: 0, high: 0, medium: 0 });
@@ -260,21 +262,22 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function init() {
-      try {
-        const [feedRes, recentRes, statsRes] = await Promise.all([
-          fetchApi("/api/feeds/health"),
-          fetchApi("/api/iocs?page_size=10&severity_min=5.0&sort_by=last_seen"),
-          fetchApi("/api/stats"),
-        ]);
-        setFeeds(feedRes?.feeds ?? []);
-        setRecentIOCs(recentRes?.items ?? []);
-        setStats(statsRes ?? null);
-      } catch (err) {
-        console.error(err);
-        setError("Could not reach the backend. Ensure the API is running at http://127.0.0.1:8000");
-      } finally {
-        setLoading(false);
+      // Each call fails independently — only /api/stats failing shows the full error state.
+      const [feedRes, recentRes, statsRes] = await Promise.all([
+        fetchApi("/api/feeds/health").catch(() => null),
+        fetchApi("/api/iocs?page_size=10&severity_min=5.0&sort_by=last_seen").catch(() => null),
+        fetchApi("/api/stats").catch(() => null),
+      ]);
+
+      if (statsRes === null) {
+        setError("Could not reach the backend. Ensure the API is running at the configured backend URL");
       }
+      setFeeds(feedRes?.feeds ?? []);
+      setFeedsStale(feedRes === null);
+      setRecentIOCs(recentRes?.items ?? []);
+      setRecentStale(recentRes === null);
+      setStats(statsRes ?? null);
+      setLoading(false);
 
       // Phase 2a — map: fetch 50 IPs first so the map renders fast,
       // then silently expand to 200 in the background.
@@ -415,7 +418,14 @@ export default function DashboardPage() {
             const groupFeeds = names
               .map((n) => feeds.find((f) => f.feed_name === n))
               .filter(Boolean) as FeedHealth[];
-            if (groupFeeds.length === 0) return null;
+            if (groupFeeds.length === 0) {
+              if (!feedsStale) return null;
+              return (
+                <span key={groupLabel} className="text-[8px] font-mono" style={{ color: "rgba(245,158,11,0.6)" }}>
+                  ⚠ {groupLabel} updating…
+                </span>
+              );
+            }
             return (
               <div key={groupLabel} className="flex items-center gap-1 min-w-0 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
                 <span className="text-[7px] uppercase tracking-[0.15em] text-slate-700 font-mono flex-shrink-0 pr-1" style={{ borderRight: "1px solid rgba(34,211,238,0.08)" }}>
@@ -424,22 +434,24 @@ export default function DashboardPage() {
                 {groupFeeds.map((feed) => {
                   const ok = feed.last_run_status === "success";
                   const running = feed.last_run_status === "running";
+                  // Warn (amber) when feed has data but last run errored — not a full failure.
+                  const warn = !ok && !running && feed.total_iocs > 0;
                   const label = FEED_DISPLAY[feed.feed_name]?.label ?? feed.feed_name;
-                  const dotColor = ok ? "#10b981" : running ? "#f59e0b" : "#ef4444";
-                  const textColor = ok ? "#6ee7b7" : running ? "#fcd34d" : "#fca5a5";
+                  const dotColor = ok ? "#10b981" : (running || warn) ? "#f59e0b" : "#ef4444";
+                  const textColor = ok ? "#6ee7b7" : (running || warn) ? "#fcd34d" : "#fca5a5";
                   const countLabel =
                     feed.feed_name === "mitre_attack"    ? `${(feed.last_iocs_fetched ?? 0).toLocaleString()}` :
                     feed.feed_name === "virustotal"      ? `${(feed.last_iocs_fetched ?? 0).toLocaleString()}` :
                     feed.feed_name === "geoip_enricher"  ? `${(feed.last_iocs_fetched ?? 0).toLocaleString()} IPs` :
-                    !ok ? "ERR" :
-                    feed.total_iocs.toLocaleString();
+                    feed.total_iocs > 0 ? feed.total_iocs.toLocaleString() :
+                    "ERR";
                   return (
                     <div
                       key={feed.feed_name}
                       className="flex items-center gap-1 px-1.5 py-0.5 rounded flex-shrink-0"
                       style={{
-                        background: ok ? "rgba(16,185,129,0.04)" : running ? "rgba(245,158,11,0.04)" : "rgba(239,68,68,0.05)",
-                        border: `1px solid ${ok ? "rgba(16,185,129,0.14)" : running ? "rgba(245,158,11,0.2)" : "rgba(239,68,68,0.2)"}`,
+                        background: ok ? "rgba(16,185,129,0.04)" : (running || warn) ? "rgba(245,158,11,0.04)" : "rgba(239,68,68,0.05)",
+                        border: `1px solid ${ok ? "rgba(16,185,129,0.14)" : (running || warn) ? "rgba(245,158,11,0.2)" : "rgba(239,68,68,0.2)"}`,
                       }}
                       title={feed.last_error_msg ?? `Last run: ${feed.last_run_at ?? "never"}`}
                     >
@@ -547,6 +559,9 @@ export default function DashboardPage() {
             subtitle="High-severity indicators"
             right={
               <div className="flex items-center gap-1.5">
+                {recentStale && (
+                  <span className="text-[8px] font-mono" style={{ color: "rgba(245,158,11,0.6)" }}>⚠ updating…</span>
+                )}
                 <span
                   className="w-1.5 h-1.5 rounded-full"
                   style={{
